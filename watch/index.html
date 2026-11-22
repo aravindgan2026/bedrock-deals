@@ -25,6 +25,11 @@ p{margin:0;color:var(--soft)}
 #err{color:#B42318;font-weight:700}
 form{display:flex;gap:8px}form[hidden]{display:none}input{flex:1;font:inherit;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
 details{margin-top:4px}summary{cursor:pointer;color:var(--accent);font-weight:700;font-size:14px}.tl{margin:6px 0 0;padding:0;list-style:none;font-size:13px;color:var(--soft)}.tl li{padding:3px 0;border-top:1px solid var(--line)}.tl b{color:var(--fg)}a{color:var(--accent)}#lock{max-width:340px;margin:18vh auto 0;display:flex;flex-direction:column;gap:12px}#lock form{flex-direction:column}#app[hidden],#lock[hidden]{display:none}
+.fun{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}.fun div{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:8px 4px;text-align:center}.fun b{display:block;font-size:20px}.fun span{font-size:11px;color:var(--soft)}
+.chips{display:flex;gap:6px;flex-wrap:wrap}.chips button{background:var(--line);color:var(--fg);padding:6px 11px;font-size:14px}.chips button.on{background:var(--accent);color:#fff}
+#q{width:100%}
+.heat{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:6px;color:#fff}.h-hot{background:#D92D20}.h-warm{background:#DC6803}.h-cool{background:#667085}.h-done{background:var(--ok)}
+.stage{display:flex;gap:3px;margin:2px 0}.stage i{flex:1;height:6px;border-radius:3px;background:var(--line)}.stage i.on{background:var(--accent)}
 button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10px;background:var(--accent);color:#fff}
 </style>
 </head>
@@ -39,9 +44,13 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
   <p id="upd">Loading…</p>
   <p class="note">Updates by itself every minute. Taps from our own team's phones and computers are taken out. A link can be forwarded, so "Srinivas" means "someone with Srinivas's link".</p>
   <p id="err2"></p>
+  <div id="fun" class="fun"></div>
+  <div class="chips" id="chips"><button data-f="all" class="on">All</button><button data-f="hot">Hot</button><button data-f="warm">Warm+</button><button data-f="unf">Didn't finish</button><button data-f="held">Held</button><button data-f="named">People only</button></div>
+  <input id="q" type="search" placeholder="Search a name or email">
   <section id="snf"></section>
   <section id="holds"></section>
   <section id="all"></section>
+  <section id="un"></section>
   <section id="ph"></section>
   <p class="note"><a href="#" id="out">Lock this page on this phone</a></p>
 </main>
@@ -56,25 +65,47 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
   function name(p){var w=p.who;if(p.friendOf)return 'A friend of '+p.friendOf.split('@')[0];if(w.indexOf('(general')>-1)return w.split(' (')[0]+' (no-name link)';return w}
   function N(x){return Number(x)||0}
   function money(a){return a.map(function(x){return '$'+N(x)+'K'}).join(', ')}
-  function draw(d){
-    $('upd').textContent='Last updated '+t(d.at)+'. '+d.teamEventsRemoved+' taps from our own team taken out.';
-    var snf=d.people.filter(function(p){return p.startedNotFinished});
-    $('snf').innerHTML='<h2>Started to hold a spot, didn\'t finish ('+snf.length+')</h2>'+(snf.length?snf.map(function(p){
-      return '<div class="card hot"><div class="who">'+esc(name(p))+'<span class="tag">'+esc(p.tier)+' link</span></div>'+
-      '<div class="big">Pressed Invest '+esc(t(p.lastInvest))+' ('+ago(p.lastInvest)+'). Did not fill in the form.</div>'+
-      (p.amounts.length?'<div>Looked at amounts: '+esc(money(p.amounts))+'</div>':'')+
-      '<div>'+N(p.views)+(p.views==1?' visit on ':' visits on ')+N(p.devices)+' device'+(p.devices==1?'':'s')+(p.video?', watched the video':'')+'</div></div>'}).join(''):'<p>Nobody right now.</p>');
-    $('holds').innerHTML='<h2>Spots held ('+d.holds.length+')</h2>'+(d.holds.length?d.holds.map(function(h){
-      return '<div class="card"><div class="who">'+esc(h.name)+' <span class="ok">$'+Number(h.amount).toLocaleString()+'</span></div><div>'+esc(t(h.at))+(h.source==='preview'?' · from the test site':h.source&&h.source.indexOf('p:')===0?' · from partner page '+esc(h.source.slice(2)):'')+'</div></div>'}).join(''):'<p>None yet.</p>');
-    $('all').innerHTML='<h2>Everyone who looked ('+d.people.length+')</h2>'+d.people.map(function(p){
-      return '<div class="card"><div class="who">'+esc(name(p))+'<span class="tag">'+esc(p.tier)+' link</span></div>'+
-      '<div>'+N(p.views)+(p.views==1?' visit on ':' visits on ')+N(p.devices)+' device'+(p.devices==1?'':'s')+' · read it '+N(p.reads)+'x'+(p.video?' · video '+N(p.video)+'x':'')+(p.back?' · came back '+N(p.back)+'x':'')+'</div>'+
+  var D=null, FL='all', QS='';
+  var STAGES=['Opened','Read details','Watched video','Looked at amounts','Pressed Invest','Held a spot'];
+  function card(p){
+    var dots='';for(var i=1;i<=6;i++)dots+='<i'+(i<=N(p.stage)?' class="on"':'')+'></i>';
+    var hc={hot:'Hot',warm:'Warm',cool:'Cool',done:'Done'}[p.heat]||'';
+    return '<div class="card'+(p.startedNotFinished?' hot':'')+'"><div class="who">'+esc(name(p))+'<span class="tag">'+esc(p.tier)+' link</span><span class="heat h-'+esc(p.heat==='hot'||p.heat==='warm'||p.heat==='cool'||p.heat==='done'?p.heat:'cool')+'">'+hc+'</span></div>'+
+      '<div class="stage" title="'+esc(STAGES[N(p.stage)-1]||'')+'">'+dots+'</div>'+
+      '<div class="big"><b>'+esc(STAGES[N(p.stage)-1]||'')+'</b> · score '+N(p.score)+'</div>'+
+      (p.startedNotFinished?'<div class="big">Pressed Invest '+esc(t(p.lastInvest))+' ('+ago(p.lastInvest)+'). Did not fill in the form.</div>':'')+
+      '<div class="note">'+esc(p.next||'')+'</div>'+
+      '<div>'+N(p.views)+(p.views==1?' open':' opens')+' in '+N(p.sittings)+(p.sittings==1?' sitting':' sittings')+' · read it '+N(p.reads)+'x'+(p.video?' · video '+N(p.video)+'x':'')+(p.back?' · came back '+N(p.back)+'x':'')+'</div>'+
       (p.amounts.length?'<div>Looked at amounts: '+esc(money(p.amounts))+'</div>':'')+
       (p.investTaps?'<div>Pressed Invest '+N(p.investTaps)+'x</div>':'')+(p.talkTaps?'<div>Tapped "talk to us" '+N(p.talkTaps)+'x</div>':'')+
-      '<div class="note">First seen '+esc(t(p.first))+' · last visit '+esc(t(p.last))+'</div>'+
-      (p.deviceList&&p.deviceList.length?'<div class="note">Devices: '+esc(p.deviceList.join(' · '))+'</div>':'')+
+      '<div class="note">First seen '+esc(t(p.first))+' · last '+esc(t(p.last))+' ('+ago(p.last)+')</div>'+
+      (p.deviceList&&p.deviceList.length?'<div class="note">Seen on: '+esc(p.deviceList.join(' · '))+' ('+N(p.devices)+' network'+(p.devices==1?'':'s')+')</div>':'')+
       (p.timeline&&p.timeline.length?'<details><summary>Every tap ('+p.timeline.length+(p.timeline.length>=40?' latest':'')+')</summary><ul class="tl">'+p.timeline.map(function(v){return '<li><b>'+esc(t(v.at))+'</b> · '+esc(v.what)+' · '+esc(v.device)+'</li>'}).join('')+'</ul></details>':'')+
-      '</div>'}).join('');
+      '<div class="note">Why this score: '+esc(p.why||'')+'</div></div>'}
+  function drawList(){
+    if(!D)return;
+    var q=QS.toLowerCase(),ppl=D.people.filter(function(p){return p.heat!==undefined});
+    var f=ppl.filter(function(p){
+      if(q&&(p.who+' '+(p.friendOf||'')).toLowerCase().indexOf(q)<0)return false;
+      if(FL==='hot')return p.heat==='hot'; if(FL==='warm')return p.heat==='hot'||p.heat==='warm';
+      if(FL==='unf')return p.startedNotFinished; if(FL==='held')return N((p.held||[]).length)>0;
+      if(FL==='named')return p.named; return true});
+    f.sort(function(a,b){var r={hot:0,warm:1,cool:2,done:3};return (r[a.heat]-r[b.heat])||(N(b.score)-N(a.score))});
+    $('all').innerHTML='<h2>'+(FL==='all'?'Everyone who opened':'Matching')+' ('+f.length+')</h2>'+(f.length?f.map(card).join(''):'<p>Nobody matches.</p>');
+    var un=D.unopened.filter(function(u){return !q||u.who.toLowerCase().indexOf(q)>-1});
+    $('un').innerHTML=(FL==='all'||FL==='named')?'<h2>Link made, never opened ('+un.length+')</h2><p class="note">A link existing does not prove an email went out. Check the send list before chasing these.</p>'+un.map(function(u){return '<div class="card"><div class="who">'+esc(u.who)+'<span class="tag">'+esc(u.tier)+' link</span></div><div class="note">No opens yet.</div></div>'}).join(''):'';
+    var bs=document.querySelectorAll('.chips button');for(var i=0;i<bs.length;i++)bs[i].className=bs[i].getAttribute('data-f')===FL?'on':'';
+  }
+  function draw(d){
+    D=d;
+    $('upd').textContent='Last updated '+t(d.at)+'. Removed: '+N(d.teamEventsRemoved)+' taps from our own team'+(N(d.botEventsRemoved)?' and '+N(d.botEventsRemoved)+' automatic opens (email scanners, link previews)':'')+'.';
+    var fu=d.funnel;
+    $('fun').innerHTML=[['Links made',fu.links],['Opened',fu.opened],['Read details',fu.read],['Watched video',fu.video],['Looked at amounts',fu.amounts],['Pressed Invest',fu.invest],['Held a spot',fu.held],['Never opened',d.unopened.length]].map(function(x){return '<div><b>'+N(x[1])+'</b><span>'+x[0]+'</span></div>'}).join('');
+    var snf=d.people.filter(function(p){return p.startedNotFinished});
+    $('snf').innerHTML='<h2>Started to hold a spot, didn\'t finish ('+snf.length+')</h2>'+(snf.length?snf.map(card).join(''):'<p>Nobody right now.</p>');
+    $('holds').innerHTML='<h2>Spots held ('+d.holds.length+')</h2>'+(d.holds.length?d.holds.map(function(h){
+      return '<div class="card"><div class="who">'+esc(h.name)+' <span class="ok">$'+Number(h.amount).toLocaleString()+'</span></div><div>'+esc(t(h.at))+(h.source==='preview'?' \u00b7 from the test site':h.source&&h.source.indexOf('p:')===0?' \u00b7 from partner page '+esc(h.source.slice(2)):'')+'</div></div>'}).join(''):'<p>None yet.</p>');
+    drawList();
     drawPh(d.ph);
   }
   function mins(s){s=N(s);return s<60?s+' sec':Math.round(s/60)+' min'}
@@ -83,7 +114,7 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
     if(!ph||!ph.ok){$('ph').innerHTML=h+'<p>PostHog did not answer'+(ph&&ph.why?' ('+esc(ph.why)+')':'')+'. The rest of the page is fine.</p>';return}
     h+='<p class="note">These come from the partner pages and the join page. The investor links themselves do not report to PostHog, so their detail is in the cards above.</p>';
     h+='<h2>By link</h2>'+ph.links.slice(0,20).map(function(l){return '<div class="card"><div class="who">'+esc(l.who)+(l.page?'<span class="tag">'+esc(l.page)+'</span>':'')+'</div><div>'+N(l.views)+' page views · '+N(l.taps)+' taps · '+N(l.sessions)+' visits · '+N(l.devices)+' device'+(l.devices==1?'':'s')+'</div><div class="note">Last seen '+esc(t(l.last))+'</div></div>'}).join('');
-    h+='<h2>Latest visits</h2>'+ph.sessions.slice(0,25).map(function(x){return '<div class="card"><div class="who">'+esc(x.who)+'</div><div>'+esc(t(x.first))+' · stayed '+mins(x.secs)+' · '+N(x.views)+' pages · '+N(x.taps)+' taps</div><div class="note">'+esc([x.device,x.browser,x.city,x.state].filter(Boolean).join(' · '))+' · <a href="'+esc(x.replay)+'" target="_blank" rel="noopener noreferrer">watch replay</a></div></div>'}).join('');
+    h+='<h2>Latest visits</h2>'+ph.sessions.slice(0,25).map(function(x){return '<div class="card"><div class="who">'+esc(x.who)+'</div><div>'+esc(t(x.first))+' · stayed '+mins(x.secs)+' · '+N(x.views)+' pages · '+N(x.taps)+' taps</div><div class="note">'+esc([x.device,x.browser,x.city,x.state].filter(Boolean).join(' · '))+(/^https:\/\/(us|eu|app)\.posthog\.com\/project\/\d+\/replay\/[A-Za-z0-9%_-]+$/.test(x.replay)?' · <a href="'+esc(x.replay)+'" target="_blank" rel="noopener noreferrer">watch replay</a>':'')+'</div></div>'}).join('');
     $('ph').innerHTML=h;
   }
   function lock(msg){$('app').hidden=true;$('lock').hidden=false;$('err').textContent=msg||''}
@@ -94,6 +125,8 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
       .catch(function(){$('err2').textContent='Could not reach the server. Trying again in a minute.'});
   }
   $('kf').addEventListener('submit',function(e){e.preventDefault();K=$('ki').value.trim();try{localStorage.setItem('watch_k',K)}catch(x){};load()});
+  $('chips').addEventListener('click',function(e){var f=e.target.getAttribute&&e.target.getAttribute('data-f');if(f){FL=f;drawList()}});
+  $('q').addEventListener('input',function(){QS=$('q').value.trim();drawList()});
   $('out').addEventListener('click',function(e){e.preventDefault();K='';try{localStorage.removeItem('watch_k')}catch(x){};lock('Locked.')});
   load(); setInterval(load,60000);
 })();
