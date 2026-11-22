@@ -47,7 +47,8 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
   function t(ts){if(!ts)return'';var d=new Date(ts);return d.toLocaleString('en-US',{timeZone:'America/New_York',weekday:'short',hour:'numeric',minute:'2-digit'})+' ET'}
   function ago(ts){var m=Math.round((Date.now()-new Date(ts))/60000);return m<60?m+' min ago':m<1440?Math.round(m/60)+' hours ago':Math.round(m/1440)+' days ago'}
   function name(p){var w=p.who;if(p.friendOf)return 'A friend of '+p.friendOf.split('@')[0];if(w.indexOf('(general')>-1)return w.split(' (')[0]+' (no-name link)';return w}
-  function money(a){return a.map(function(x){return '$'+x+'K'}).join(', ')}
+  function N(x){return Number(x)||0}
+  function money(a){return a.map(function(x){return '$'+N(x)+'K'}).join(', ')}
   function draw(d){
     $('upd').textContent='Last updated '+t(d.at)+'. '+d.teamEventsRemoved+' taps from our own team taken out.';
     var snf=d.people.filter(function(p){return p.startedNotFinished});
@@ -55,14 +56,14 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
       return '<div class="card hot"><div class="who">'+esc(name(p))+'<span class="tag">'+esc(p.tier)+' link</span></div>'+
       '<div class="big">Pressed Invest '+esc(t(p.lastInvest))+' ('+ago(p.lastInvest)+'). Did not fill in the form.</div>'+
       (p.amounts.length?'<div>Looked at amounts: '+esc(money(p.amounts))+'</div>':'')+
-      '<div>'+p.views+' visits on '+p.devices+' device'+(p.devices==1?'':'s')+(p.video?', watched the video':'')+'</div></div>'}).join(''):'<p>Nobody right now.</p>');
+      '<div>'+N(p.views)+' visits on '+N(p.devices)+' device'+(p.devices==1?'':'s')+(p.video?', watched the video':'')+'</div></div>'}).join(''):'<p>Nobody right now.</p>');
     $('holds').innerHTML='<h2>Spots held ('+d.holds.length+')</h2>'+(d.holds.length?d.holds.map(function(h){
       return '<div class="card"><div class="who">'+esc(h.name)+' <span class="ok">$'+Number(h.amount).toLocaleString()+'</span></div><div>'+esc(t(h.at))+(h.source==='preview'?' · from the test site':h.source&&h.source.indexOf('p:')===0?' · from partner page '+esc(h.source.slice(2)):'')+'</div></div>'}).join(''):'<p>None yet.</p>');
     $('all').innerHTML='<h2>Everyone who looked ('+d.people.length+')</h2>'+d.people.map(function(p){
       return '<div class="card"><div class="who">'+esc(name(p))+'<span class="tag">'+esc(p.tier)+' link</span></div>'+
-      '<div>'+p.views+' visits on '+p.devices+' device'+(p.devices==1?'':'s')+' · read it '+p.reads+'x'+(p.video?' · video '+p.video+'x':'')+(p.back?' · came back '+p.back+'x':'')+'</div>'+
+      '<div>'+N(p.views)+' visits on '+N(p.devices)+' device'+(p.devices==1?'':'s')+' · read it '+N(p.reads)+'x'+(p.video?' · video '+N(p.video)+'x':'')+(p.back?' · came back '+N(p.back)+'x':'')+'</div>'+
       (p.amounts.length?'<div>Looked at amounts: '+esc(money(p.amounts))+'</div>':'')+
-      (p.investTaps?'<div>Pressed Invest '+p.investTaps+'x</div>':'')+(p.talkTaps?'<div>Tapped "talk to us" '+p.talkTaps+'x</div>':'')+
+      (p.investTaps?'<div>Pressed Invest '+N(p.investTaps)+'x</div>':'')+(p.talkTaps?'<div>Tapped "talk to us" '+N(p.talkTaps)+'x</div>':'')+
       '<div class="note">Last visit '+esc(t(p.last))+'</div></div>'}).join('');
   }
   function load(){
