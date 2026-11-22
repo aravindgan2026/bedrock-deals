@@ -87,7 +87,7 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
     var q=QS.toLowerCase(),ppl=D.people.filter(function(p){return p.heat!==undefined});
     var f=ppl.filter(function(p){
       if(q&&(p.who+' '+(p.friendOf||'')).toLowerCase().indexOf(q)<0)return false;
-      if(FL==='hot')return p.heat==='hot'; if(FL==='warm')return p.heat==='hot'||p.heat==='warm';
+      if(FL==='hot')return p.heat==='hot'&&!p.generic; if(FL==='warm')return (p.heat==='hot'||p.heat==='warm')&&!p.generic;
       if(FL==='unf')return p.startedNotFinished; if(FL==='held')return N((p.held||[]).length)>0;
       if(FL==='named')return p.named; return true});
     f.sort(function(a,b){var r={hot:0,warm:1,cool:2,done:3};return (r[a.heat]-r[b.heat])||(N(b.score)-N(a.score))});
