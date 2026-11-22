@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow,noarchive">
+<meta name="referrer" content="no-referrer">
+<title>Who Looked</title>
+<link rel="icon" href="/favicon-32.png">
+<style>
+:root{--bg:#FBF6EF;--fg:#1A120C;--soft:#6B5D52;--accent:#FF4D00;--line:#ECE3D9;--card:#FFFFFF;--hot:#FFF1E8;--ok:#127A3E}
+@media (prefers-color-scheme: dark){:root{--bg:#17110C;--fg:#F6EEE6;--soft:#B9AA9C;--accent:#FF6A26;--line:#3A2E25;--card:#221A14;--hot:#2E1C10;--ok:#5BD08A;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,'Segoe UI',sans-serif;padding:20px 16px 40px}
+main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+h1{font-size:24px;margin:0}h2{font-size:18px;margin:6px 0 0}
+p{margin:0;color:var(--soft)}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px;display:flex;flex-direction:column;gap:6px}
+.hot{background:var(--hot);border-color:var(--accent)}
+.who{font-weight:700;font-size:17px;word-break:break-word}
+.tag{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;background:var(--line);color:var(--soft);margin-left:6px}
+.big{font-size:15px;color:var(--fg)}
+.ok{color:var(--ok);font-weight:700}
+.note{font-size:13px}
+#err{color:#B42318;font-weight:700}
+form{display:flex;gap:8px}input{flex:1;font:inherit;padding:10px;border-radius:10px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10px;background:var(--accent);color:#fff}
+</style>
+</head>
+<body>
+<main>
+  <h1>Who looked at Winter Park</h1>
+  <p id="upd">Loading…</p>
+  <p class="note">Updates by itself every minute. Taps from our own team's phones and computers are taken out. A link can be forwarded, so "Srinivas" means "someone with Srinivas's link".</p>
+  <form id="kf" hidden><input id="ki" type="password" placeholder="Paste your key" autocomplete="off"><button>Open</button></form>
+  <p id="err"></p>
+  <section id="snf"></section>
+  <section id="holds"></section>
+  <section id="all"></section>
+</main>
+<script>
+(function(){
+  var F='https://dtybhuhcuqybjipnfgcg.supabase.co/functions/v1/sussex-watch', K='';
+  function $(i){return document.getElementById(i)}
+  try{var m=location.hash.match(/k=([^&]+)/); if(m){K=decodeURIComponent(m[1]); localStorage.setItem('watch_k',K); history.replaceState(null,'',location.pathname)} else K=localStorage.getItem('watch_k')||''}catch(x){}
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]})}
+  function t(ts){if(!ts)return'';var d=new Date(ts);return d.toLocaleString('en-US',{timeZone:'America/New_York',weekday:'short',hour:'numeric',minute:'2-digit'})+' ET'}
+  function ago(ts){var m=Math.round((Date.now()-new Date(ts))/60000);return m<60?m+' min ago':m<1440?Math.round(m/60)+' hours ago':Math.round(m/1440)+' days ago'}
+  function name(p){var w=p.who;if(p.friendOf)return 'A friend of '+p.friendOf.split('@')[0];if(w.indexOf('(general')>-1)return w.split(' (')[0]+' (no-name link)';return w}
+  function money(a){return a.map(function(x){return '$'+x+'K'}).join(', ')}
+  function draw(d){
+    $('upd').textContent='Last updated '+t(d.at)+'. '+d.teamEventsRemoved+' taps from our own team taken out.';
+    var snf=d.people.filter(function(p){return p.startedNotFinished});
+    $('snf').innerHTML='<h2>Started to hold a spot, didn\'t finish ('+snf.length+')</h2>'+(snf.length?snf.map(function(p){
+      return '<div class="card hot"><div class="who">'+esc(name(p))+'<span class="tag">'+esc(p.tier)+' link</span></div>'+
+      '<div class="big">Pressed Invest '+esc(t(p.lastInvest))+' ('+ago(p.lastInvest)+'). Did not fill in the form.</div>'+
+      (p.amounts.length?'<div>Looked at amounts: '+esc(money(p.amounts))+'</div>':'')+
+      '<div>'+p.views+' visits on '+p.devices+' device'+(p.devices==1?'':'s')+(p.video?', watched the video':'')+'</div></div>'}).join(''):'<p>Nobody right now.</p>');
+    $('holds').innerHTML='<h2>Spots held ('+d.holds.length+')</h2>'+(d.holds.length?d.holds.map(function(h){
+      return '<div class="card"><div class="who">'+esc(h.name)+' <span class="ok">$'+Number(h.amount).toLocaleString()+'</span></div><div>'+esc(t(h.at))+(h.source==='preview'?' · from the test site':h.source&&h.source.indexOf('p:')===0?' · from partner page '+esc(h.source.slice(2)):'')+'</div></div>'}).join(''):'<p>None yet.</p>');
+    $('all').innerHTML='<h2>Everyone who looked ('+d.people.length+')</h2>'+d.people.map(function(p){
+      return '<div class="card"><div class="who">'+esc(name(p))+'<span class="tag">'+esc(p.tier)+' link</span></div>'+
+      '<div>'+p.views+' visits on '+p.devices+' device'+(p.devices==1?'':'s')+' · read it '+p.reads+'x'+(p.video?' · video '+p.video+'x':'')+(p.back?' · came back '+p.back+'x':'')+'</div>'+
+      (p.amounts.length?'<div>Looked at amounts: '+esc(money(p.amounts))+'</div>':'')+
+      (p.investTaps?'<div>Pressed Invest '+p.investTaps+'x</div>':'')+(p.talkTaps?'<div>Tapped "talk to us" '+p.talkTaps+'x</div>':'')+
+      '<div class="note">Last visit '+esc(t(p.last))+'</div></div>'}).join('');
+  }
+  function load(){
+    if(!K){$('kf').hidden=false;$('upd').textContent='Paste your key to open.';return}
+    fetch(F,{headers:{'x-watch-key':K},cache:'no-store'}).then(function(r){if(r.status===404){$('err').textContent='That key did not work.';$('kf').hidden=false;return null}return r.json()})
+      .then(function(d){if(!d)return;if(!d.ok){$('err').textContent='Could not load: '+(d.why||'error');return}$('err').textContent='';draw(d)})
+      .catch(function(){$('err').textContent='Could not reach the server. Trying again in a minute.'});
+  }
+  $('kf').addEventListener('submit',function(e){e.preventDefault();K=$('ki').value.trim();try{localStorage.setItem('watch_k',K)}catch(x){};$('kf').hidden=true;load()});
+  load(); setInterval(load,60000);
+})();
+</script>
+</body>
+</html>
