@@ -29,6 +29,8 @@ details{margin-top:4px}summary{cursor:pointer;color:var(--accent);font-weight:70
 .chips{display:flex;gap:6px;flex-wrap:wrap}.chips button{background:var(--line);color:var(--fg);padding:6px 11px;font-size:14px}.chips button.on{background:var(--accent);color:#fff}
 #q{width:100%}
 .heat{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:6px;color:#fff}.h-hot{background:#D92D20}.h-warm{background:#DC6803}.h-cool{background:#667085}.h-done{background:var(--ok)}
+.bar{fill:var(--accent)}svg text{fill:var(--soft);font-size:10px}.shr{background:#7A2E0E;color:#fff}.past{background:var(--ok);color:#fff}
+.spark{display:flex;align-items:flex-end;gap:2px;height:22px}.spark i{flex:1;background:var(--accent);border-radius:2px;min-height:2px}
 .stage{display:flex;gap:3px;margin:2px 0}.stage i{flex:1;height:6px;border-radius:3px;background:var(--line)}.stage i.on{background:var(--accent)}
 button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10px;background:var(--accent);color:#fff}
 </style>
@@ -45,7 +47,8 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
   <p class="note">Updates by itself every minute. Taps from our own team's phones and computers are taken out. A link can be forwarded, so "Srinivas" means "someone with Srinivas's link".</p>
   <p id="err2"></p>
   <div id="fun" class="fun"></div>
-  <div class="chips" id="chips"><button data-f="all" class="on">All</button><button data-f="hot">Hot</button><button data-f="warm">Warm+</button><button data-f="unf">Didn't finish</button><button data-f="held">Held</button><button data-f="named">People only</button></div>
+  <section id="chart"></section>
+  <div class="chips" id="chips"><button data-f="all" class="on">All</button><button data-f="hot">Hot</button><button data-f="warm">Warm+</button><button data-f="unf">Didn't finish</button><button data-f="held">Held</button><button data-f="named">People only</button><button data-f="shared">Looks shared</button><button data-f="past">Past investors</button></div>
   <input id="q" type="search" placeholder="Search a name or email">
   <section id="snf"></section>
   <section id="holds"></section>
@@ -67,12 +70,26 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
   function money(a){return a.map(function(x){return '$'+N(x)+'K'}).join(', ')}
   var D=null, FL='all', QS='';
   var STAGES=['Opened','Read details','Watched video','Looked at amounts','Pressed Invest','Held a spot'];
+  function pastLine(c){if(!c)return '';var inv=c.inv||{},ks=Object.keys(inv);return '<div class="note">In our CRM: '+esc(c.stage||'?')+(ks.length?'. Past investments: '+ks.map(function(k){return esc(k)+' '+N(inv[k].n)+' ($'+Math.round(N(inv[k].sum)).toLocaleString()+')'}).join(', '):'. No past investments on file.')+'</div>'}
+  function isPast(c){return !!c&&Object.keys(c.inv||{}).length>0}
+  function bars(vals,labels,h){var w=100,n=vals.length,mx=Math.max.apply(null,vals.concat([1])),bw=w/n,o='<svg viewBox="0 0 '+w+' '+h+'" width="100%" role="img" preserveAspectRatio="none" style="height:'+h+'px">';
+    vals.forEach(function(v,i){var bh=v/mx*h;o+='<rect class="bar" x="'+(i*bw+0.4)+'" y="'+(h-bh)+'" width="'+(bw-0.8)+'" height="'+bh+'"><title>'+esc(labels[i])+': '+N(v)+'</title></rect>'});
+    return o+'</svg>'}
+  function drawChart(sr){
+    var days=Object.keys(sr.byDay).sort(),dv=days.map(function(k){return sr.byDay[k]}),dl=days.map(function(k){return k.slice(5)});
+    var hv=sr.byHour,hl=hv.map(function(_,i){return (i%12||12)+(i<12?'am':'pm')});
+    $('chart').innerHTML='<h2>When people look</h2><div class="card"><div class="note">Taps per day (our team and scanners removed)</div>'+bars(dv,dl,50)+'<div class="note">'+esc(dl.join(' \u00b7 '))+'</div>'+
+      '<div class="note" style="margin-top:8px">Taps by hour of day, Eastern time (peak: '+esc(hl[hv.indexOf(Math.max.apply(null,hv))])+')</div>'+bars(hv,hl,50)+'<div class="note">12am \u2192 11pm</div></div>'}
+  function sparkOf(days,keys){var mx=Math.max.apply(null,keys.map(function(k){return N(days[k])}).concat([1]));return '<div class="spark" title="Taps per day since the first send">'+keys.map(function(k){return '<i style="height:'+Math.max(8,N(days[k])/mx*100)+'%;opacity:'+(N(days[k])?1:.25)+'"></i>'}).join('')+'</div>'}
+  var DKEYS=[];
   function card(p){
     var dots='';for(var i=1;i<=6;i++)dots+='<i'+(i<=N(p.stage)?' class="on"':'')+'></i>';
     var hc={hot:'Hot',warm:'Warm',cool:'Cool',done:'Done'}[p.heat]||'';
-    return '<div class="card'+(p.startedNotFinished?' hot':'')+'"><div class="who">'+esc(name(p))+'<span class="tag">'+esc(p.tier)+' link</span><span class="heat h-'+esc(p.heat==='hot'||p.heat==='warm'||p.heat==='cool'||p.heat==='done'?p.heat:'cool')+'">'+hc+'</span></div>'+
+    return '<div class="card'+(p.startedNotFinished?' hot':'')+'"><div class="who">'+esc(name(p))+'<span class="tag">'+esc(p.tier)+' link</span>'+(isPast(p.crm)?'<span class="heat past">Past investor</span>':'')+(p.shared&&p.shared.level!=='no'?'<span class="heat shr">'+(p.shared.level==='likely'?'Looks shared':'Maybe shared')+'</span>':'')+'<span class="heat h-'+esc(p.heat==='hot'||p.heat==='warm'||p.heat==='cool'||p.heat==='done'?p.heat:'cool')+'">'+hc+'</span></div>'+
       '<div class="stage" title="'+esc(STAGES[N(p.stage)-1]||'')+'">'+dots+'</div>'+
-      '<div class="big"><b>'+esc(STAGES[N(p.stage)-1]||'')+'</b> · score '+N(p.score)+'</div>'+
+      '<div class="big"><b>'+esc(STAGES[N(p.stage)-1]||'')+'</b> · score '+N(p.score)+'</div>'+pastLine(p.crm)+
+      (p.shared&&p.shared.level!=='no'?'<div class="note"><b>Link may have been passed around:</b> '+esc(p.shared.why)+'. One person with several devices looks the same, so ask before assuming.</div>':'')+
+      (p.days?sparkOf(p.days,DKEYS):'')+
       (p.startedNotFinished?'<div class="big">Pressed Invest '+esc(t(p.lastInvest))+' ('+ago(p.lastInvest)+'). Did not fill in the form.</div>':'')+
       '<div class="note">'+esc(p.next||'')+'</div>'+
       '<div>'+N(p.views)+(p.views==1?' open':' opens')+' in '+N(p.sittings)+(p.sittings==1?' sitting':' sittings')+' · read it '+N(p.reads)+'x'+(p.video?' · video '+N(p.video)+'x':'')+(p.back?' · came back '+N(p.back)+'x':'')+'</div>'+
@@ -81,7 +98,7 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
       '<div class="note">First seen '+esc(t(p.first))+' · last '+esc(t(p.last))+' ('+ago(p.last)+')</div>'+
       (p.deviceList&&p.deviceList.length?'<div class="note">Seen on: '+esc(p.deviceList.join(' · '))+' ('+N(p.devices)+' network'+(p.devices==1?'':'s')+')</div>':'')+
       (p.timeline&&p.timeline.length?'<details><summary>Every tap ('+p.timeline.length+(p.timeline.length>=40?' latest':'')+')</summary><ul class="tl">'+p.timeline.map(function(v){return '<li><b>'+esc(t(v.at))+'</b> · '+esc(v.what)+' · '+esc(v.device)+'</li>'}).join('')+'</ul></details>':'')+
-      '<div class="note">Why this score: '+esc(p.why||'')+'</div></div>'}
+      '<details><summary>How the score adds up ('+N(p.score)+')</summary><ul class="tl">'+(p.parts||[]).map(function(x){return '<li>'+esc(x[0])+' <b>+'+N(x[1])+'</b></li>'}).join('')+'<li>Subtotal '+N(p.rawScore)+' \u00d7 recency '+N(p.recencyFactor)+' (1 if seen in the last day, lower as it gets older) = <b>'+N(p.score)+'</b></li></ul></details></div>'}
   function drawList(){
     if(!D)return;
     var q=QS.toLowerCase(),ppl=D.people.filter(function(p){return p.heat!==undefined});
@@ -89,15 +106,15 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
       if(q&&(p.who+' '+(p.friendOf||'')).toLowerCase().indexOf(q)<0)return false;
       if(FL==='hot')return p.heat==='hot'&&!p.generic; if(FL==='warm')return (p.heat==='hot'||p.heat==='warm')&&!p.generic;
       if(FL==='unf')return p.startedNotFinished; if(FL==='held')return N((p.held||[]).length)>0;
-      if(FL==='named')return p.named; return true});
+      if(FL==='named')return p.named; if(FL==='shared')return p.shared&&p.shared.level!=='no'; if(FL==='past')return isPast(p.crm); return true});
     f.sort(function(a,b){var r={hot:0,warm:1,cool:2,done:3};return (r[a.heat]-r[b.heat])||(N(b.score)-N(a.score))});
     $('all').innerHTML='<h2>'+(FL==='all'?'Everyone who opened':'Matching')+' ('+f.length+')</h2>'+(f.length?f.map(card).join(''):'<p>Nobody matches.</p>');
     var un=D.unopened.filter(function(u){return !q||u.who.toLowerCase().indexOf(q)>-1});
-    $('un').innerHTML=(FL==='all'||FL==='named')?'<h2>Link made, never opened ('+un.length+')</h2><p class="note">A link existing does not prove an email went out. Check the send list before chasing these.</p>'+un.map(function(u){return '<div class="card"><div class="who">'+esc(u.who)+'<span class="tag">'+esc(u.tier)+' link</span></div><div class="note">No opens yet.</div></div>'}).join(''):'';
+    $('un').innerHTML=(FL==='all'||FL==='named')?'<h2>Link made, never opened ('+un.length+')</h2><p class="note">A link existing does not prove an email went out. Check the send list before chasing these.</p>'+un.map(function(u){return '<div class="card"><div class="who">'+esc(u.who)+'<span class="tag">'+esc(u.tier)+' link</span>'+(isPast(u.crm)?'<span class="heat past">Past investor</span>':'')+'</div><div class="note">No opens yet.</div>'+pastLine(u.crm)+'</div>'}).join(''):'';
     var bs=document.querySelectorAll('.chips button');for(var i=0;i<bs.length;i++)bs[i].className=bs[i].getAttribute('data-f')===FL?'on':'';
   }
   function draw(d){
-    D=d;
+    D=d;DKEYS=Object.keys(d.series.byDay).sort();
     $('upd').textContent='Last updated '+t(d.at)+'. Removed: '+N(d.teamEventsRemoved)+' taps from our own team'+(N(d.botEventsRemoved)?' and '+N(d.botEventsRemoved)+' automatic opens (email scanners, link previews)':'')+'.';
     var fu=d.funnel;
     $('fun').innerHTML=[['Links made',fu.links],['Opened',fu.opened],['Read details',fu.read],['Watched video',fu.video],['Looked at amounts',fu.amounts],['Pressed Invest',fu.invest],['Held a spot',fu.held],['Never opened',d.unopened.length]].map(function(x){return '<div><b>'+N(x[1])+'</b><span>'+x[0]+'</span></div>'}).join('');
@@ -105,6 +122,7 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
     $('snf').innerHTML='<h2>Started to hold a spot, didn\'t finish ('+snf.length+')</h2>'+(snf.length?snf.map(card).join(''):'<p>Nobody right now.</p>');
     $('holds').innerHTML='<h2>Spots held ('+d.holds.length+')</h2>'+(d.holds.length?d.holds.map(function(h){
       return '<div class="card"><div class="who">'+esc(h.name)+' <span class="ok">$'+Number(h.amount).toLocaleString()+'</span></div><div>'+esc(t(h.at))+(h.source==='preview'?' \u00b7 from the test site':h.source&&h.source.indexOf('p:')===0?' \u00b7 from partner page '+esc(h.source.slice(2)):'')+'</div></div>'}).join(''):'<p>None yet.</p>');
+    drawChart(d.series);
     drawList();
     drawPh(d.ph);
   }
