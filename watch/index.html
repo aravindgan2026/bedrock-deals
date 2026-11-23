@@ -29,7 +29,7 @@ details{margin-top:4px}summary{cursor:pointer;color:var(--accent);font-weight:70
 .chips{display:flex;gap:6px;flex-wrap:wrap}.chips button{background:var(--line);color:var(--fg);padding:6px 11px;font-size:14px}.chips button.on{background:var(--accent);color:#fff}
 #q{width:100%}
 .heat{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:99px;margin-left:6px;color:#fff}.h-hot{background:#D92D20}.h-warm{background:#DC6803}.h-cool{background:#667085}.h-done{background:var(--ok)}
-.bar{fill:var(--accent)}svg text{fill:var(--soft);font-size:10px}.shr{background:#7A2E0E;color:#fff}.past{background:var(--ok);color:#fff}
+code{font-size:13px;background:var(--line);padding:1px 5px;border-radius:5px;word-break:break-all}.bar{fill:var(--accent)}svg text{fill:var(--soft);font-size:10px}.shr{background:#7A2E0E;color:#fff}.past{background:var(--ok);color:#fff}
 .spark{display:flex;align-items:flex-end;gap:2px;height:22px}.spark i{flex:1;background:var(--accent);border-radius:2px;min-height:2px}
 .stage{display:flex;gap:3px;margin:2px 0}.stage i{flex:1;height:6px;border-radius:3px;background:var(--line)}.stage i.on{background:var(--accent)}
 button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10px;background:var(--accent);color:#fff}
@@ -46,6 +46,7 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
   <p id="upd">Loading…</p>
   <p class="note">Updates by itself every minute. Taps from our own team's phones and computers are taken out. A link can be forwarded, so "Srinivas" means "someone with Srinivas's link".</p>
   <p id="err2"></p>
+  <section id="lost"></section>
   <div id="fun" class="fun"></div>
   <section id="chart"></section>
   <div class="chips" id="chips"><button data-f="all" class="on">All</button><button data-f="hot">Hot</button><button data-f="warm">Warm+</button><button data-f="unf">Didn't finish</button><button data-f="held">Held</button><button data-f="named">People only</button><button data-f="shared">Looks shared</button><button data-f="past">Past investors</button></div>
@@ -113,7 +114,16 @@ button{font:inherit;font-weight:700;padding:10px 14px;border:0;border-radius:10p
     $('un').innerHTML=(FL==='all'||FL==='named')?'<h2>Link made, never opened ('+un.length+')</h2><p class="note">A link existing does not prove an email went out. Check the send list before chasing these.</p>'+un.map(function(u){return '<div class="card"><div class="who">'+esc(u.who)+'<span class="tag">'+esc(u.tier)+' link</span>'+(isPast(u.crm)?'<span class="heat past">Past investor</span>':'')+'</div><div class="note">No opens yet.</div>'+pastLine(u.crm)+'</div>'}).join(''):'';
     var bs=document.querySelectorAll('.chips button');for(var i=0;i<bs.length;i++)bs[i].className=bs[i].getAttribute('data-f')===FL?'on':'';
   }
+  function drawLost(d){
+    var l=d.lostLinks||[];
+    var h='<h2>Asked for a new login link ('+(d.lostOk===false?'?':l.length)+')</h2>';
+    if(d.lostOk===false){$('lost').innerHTML=h+'<p>Could not check right now. Trying again in a minute.</p>';return}
+    if(!l.length){$('lost').innerHTML=h+'<p>Nobody waiting.</p>';return}
+    $('lost').innerHTML=h+'<p class="note">What to do: check it is really them (call the number on file). Then make a new link with <code>select bp_reissue_key(\'the-slug\')</code> (steps: PARTNERS-how-to-see.md) and text it to them yourself.</p>'+l.map(function(r){
+      return '<div class="card hot"><div class="who">'+esc(r.who||'(no name given)')+'</div><div class="big">Reach them at: '+esc(r.contact||'(nothing given)')+'</div><div class="note">Asked '+esc(t(r.at))+' ('+ago(r.at)+')</div></div>'}).join('');
+  }
   function draw(d){
+    drawLost(d);
     D=d;DKEYS=Object.keys(d.series.byDay).sort();
     $('upd').textContent='Last updated '+t(d.at)+'. Removed: '+N(d.teamEventsRemoved)+' taps from our own team'+(N(d.botEventsRemoved)?' and '+N(d.botEventsRemoved)+' automatic opens (email scanners, link previews)':'')+'.';
     var fu=d.funnel;
