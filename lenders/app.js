@@ -199,6 +199,7 @@
       },
       staffDealDetail: function (id) { return this.dealDetail(id); },
       staffRequests: function () { return wait(requests.filter(function (r) { return r.status === "waiting"; })); },
+      staffAlerts: function () { return wait(/[?&]alerts=1/.test(location.search) ? [{ key: "quiet:outbox", text: "The email sender has not run for 25 minutes." }, { key: "deals_not_picked", text: "1 deal has not gone to the deal maker after 30 minutes." }] : []); },
       staffDecide: function (id, ok) { requests.forEach(function (r) { if (r.id === id) r.status = ok ? "approved" : "denied"; }); return wait(true); },
       staffLink: function (id, key) { find(id).ledger_deal_key = key; return wait(true); },
       staffAddTodo: function (id, text, kind) { find(id).todos.push({ id: "t" + (++seq), text: text, kind: kind || "upload", status: "open", made_by: "staff", created_at: new Date().toISOString() }); return wait(true); },
@@ -292,6 +293,7 @@
           .then(function (r) { if (r && r.ok === false) throw new Error((r.message) || "We could not accept that file. Try a PDF, picture, Word, Excel or CSV."); return r; });
       },
       staffListDeals: function () { return rpc("staff_list_deals").then(function (r) { return r || []; }); },
+      staffAlerts: function () { return rpc("staff_alerts").then(function (r) { return Array.isArray(r) ? r : []; }); },
       staffRequests: function () { return rpc("staff_list_access_requests").then(function (r) { return (r || []).filter(function (x) { return x.status === "waiting"; }); }); },
       staffDecide: function (id, approve) { return rpc("staff_decide_access", { p_request_id: id, p_approve: approve }); },
       staffLink: function (id, key) { return rpc("staff_link_deal", { p_deal_id: id, p_ledger_deal_key: key }); },
@@ -891,7 +893,8 @@
     setMain(wrap(h("p", { text: "Loading..." })), "Staff");
     api.staffMfa().then(function (m) {
       if (m && m.needed) return staffMfaScreen(m);
-      return Promise.all([loadForm(), api.staffListDeals(), api.staffRequests()]).then(function (a) { staffBoard(a[1] || [], a[2] || []); });
+      var alerts = api.staffAlerts().catch(function () { return [{ key: "alerts_unread", text: "The problem list could not load. Try again in a minute." }]; });
+      return Promise.all([loadForm(), api.staffListDeals(), api.staffRequests(), alerts]).then(function (a) { staffBoard(a[1] || [], a[2] || [], a[3] || []); });
     }).catch(function (e) { setMain(wrap(msg((e && e.message) || "We could not load the staff page.", "error")), "Staff"); });
   }
   function staffMfaSetup() {
@@ -938,7 +941,15 @@
     setMain(page, "Staff");
   }
 
-  function staffBoard(rows, requests) {
+  function alertBox(alerts) {
+    if (!alerts || !alerts.length) return null;
+    var box = h("div", { class: "msg error", role: "alert" }, h("strong", { text: alerts.length === 1 ? "1 thing needs a look" : alerts.length + " things need a look" }));
+    var ul = h("ul", { style: "margin:6px 0 0 18px;padding:0" });
+    alerts.forEach(function (x) { ul.appendChild(h("li", { text: String(x && x.text || "") })); });
+    box.appendChild(ul);
+    return box;
+  }
+  function staffBoard(rows, requests, alerts) {
     var filter = "all";
     rows.forEach(function (d) {
       d._age = d.age_days != null ? d.age_days : ageDays(d.submitted_at);
@@ -974,7 +985,7 @@
     });
     drawChips(); drawList();
     setMain(wrap(h("h1", { text: "Staff" }), h("div", { class: "who" }, SESSION.user && SESSION.user.email ? h("span", { text: "Signed in as " + SESSION.user.email }) : null, h("button", { class: "linkbtn", type: "button", text: "Sign out", onclick: signOut, style: "padding:0;min-height:0" })),
-      h("p", { class: "lead", text: "Every deal sent through the portal, oldest first. Open one to link it, add to-dos, notes or move its step." }), chipsEl, listEl, reqEl), "Staff");
+      h("p", { class: "lead", text: "Every deal sent through the portal, oldest first. Open one to link it, add to-dos, notes or move its step." }), alertBox(alerts), chipsEl, listEl, reqEl), "Staff");
   }
 
   function staffRow(d, reload) {
