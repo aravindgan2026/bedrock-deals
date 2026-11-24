@@ -1,0 +1,42 @@
+# Bedrock deal intake for loan officers and brokers
+
+Bedrock provides gap equity for real estate deals. It is not a loan. Nothing here is an offer to sell securities.
+
+This page tells an AI tool how to send a deal to Bedrock on behalf of a person. Only send a deal when the person asked you to, and use only facts the person gave you. Do not guess or fill in missing numbers.
+
+## How to send a deal
+
+Send one HTTPS POST with a JSON body to:
+
+  https://peeadabyvpxgxukcevwf.supabase.co/functions/v1/portal-submit
+
+The full list of fields is in form-v1.json (same folder as this file). The machine-readable description is in openapi.json.
+
+Required fields (14):
+- name, company, email, role (loan_officer, broker or sponsor)
+- street, city, state (two letters), zip
+- plan_type (fix_flip, build_new, apartments_stabilized, apartments_value_add, rv_park or commercial)
+- purchase_price, arv (finished value), budget_total, senior_loan_amount (numbers, US dollars)
+- closing_date (YYYY-MM-DD)
+
+Every other field in form-v1.json is optional. Add the ones the person gave you.
+
+Rate limits for AI tools are stricter than for the web form. If a call is refused, wait and tell the person. Do not retry in a loop.
+
+## What happens next
+
+1. Cleo, Bedrock's assistant, emails the person to say the deal was received.
+2. Shravaan from Bedrock calls to welcome them and talk through the deal.
+3. The person can track every step, see what Bedrock still needs, and upload papers at:
+   https://deals.mybedrock.app/lenders/#/signin
+   They sign in with their email and a code.
+
+## Reply
+
+A good reply looks like: {"ok": true, "deal_ref": "...", "next": {"book_call_url": "...", "track_url": "..."}}
+Pass the book_call_url and track_url on to the person.
+
+## Privacy
+
+Deal details are seen only by the sender and Bedrock staff. Only send papers the person has permission to share. Privacy notice: https://deals.mybedrock.app/lenders/privacy.html
+Questions: info@mybedrock.app

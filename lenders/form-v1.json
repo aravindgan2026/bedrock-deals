@@ -1,0 +1,589 @@
+[
+  {
+    "id": "name",
+    "label": "Your name",
+    "type": "text",
+    "section": "you",
+    "required_at_send": true,
+    "required_by_engine": true
+  },
+  {
+    "id": "company",
+    "label": "Company",
+    "type": "text",
+    "section": "you",
+    "required_at_send": true,
+    "required_by_engine": true
+  },
+  {
+    "id": "email",
+    "label": "Email",
+    "type": "email",
+    "section": "you",
+    "required_at_send": true,
+    "required_by_engine": true
+  },
+  {
+    "id": "role",
+    "label": "Your role on this deal",
+    "type": "select",
+    "options": [
+      {
+        "value": "loan_officer",
+        "label": "Loan officer"
+      },
+      {
+        "value": "broker",
+        "label": "Broker"
+      },
+      {
+        "value": "sponsor",
+        "label": "Sponsor (the borrower)"
+      }
+    ],
+    "section": "you",
+    "required_at_send": true,
+    "required_by_engine": true
+  },
+  {
+    "id": "phone",
+    "label": "Phone",
+    "type": "tel",
+    "section": "you",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "referrer",
+    "label": "Who referred you?",
+    "type": "text",
+    "section": "you",
+    "required_at_send": false,
+    "required_by_engine": false,
+    "help": "Leave blank if no one did."
+  },
+  {
+    "id": "street",
+    "label": "Street address",
+    "type": "text",
+    "section": "property",
+    "required_at_send": true,
+    "required_by_engine": true
+  },
+  {
+    "id": "city",
+    "label": "City",
+    "type": "text",
+    "section": "property",
+    "required_at_send": true,
+    "required_by_engine": true
+  },
+  {
+    "id": "state",
+    "label": "State",
+    "type": "text",
+    "section": "property",
+    "required_at_send": true,
+    "required_by_engine": true
+  },
+  {
+    "id": "zip",
+    "label": "ZIP code",
+    "type": "text",
+    "section": "property",
+    "required_at_send": true,
+    "required_by_engine": true
+  },
+  {
+    "id": "property_type",
+    "label": "Property type",
+    "type": "select",
+    "options": [
+      {
+        "value": "single_family",
+        "label": "Single family"
+      },
+      {
+        "value": "multifamily",
+        "label": "Apartments"
+      },
+      {
+        "value": "mixed_use",
+        "label": "Mixed use"
+      },
+      {
+        "value": "rv_park",
+        "label": "RV park"
+      },
+      {
+        "value": "commercial",
+        "label": "Commercial"
+      },
+      {
+        "value": "land",
+        "label": "Land"
+      },
+      {
+        "value": "other",
+        "label": "Other"
+      }
+    ],
+    "section": "property",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "sqft",
+    "label": "Square feet",
+    "type": "number",
+    "section": "property",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "units",
+    "label": "Number of units",
+    "type": "number",
+    "section": "property",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "beds",
+    "label": "Bedrooms (homes only)",
+    "type": "number",
+    "section": "property",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "baths",
+    "label": "Bathrooms (homes only)",
+    "type": "number",
+    "section": "property",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "plan_type",
+    "label": "What is the plan?",
+    "type": "select",
+    "options": [
+      {
+        "value": "fix_flip",
+        "label": "Fix and flip"
+      },
+      {
+        "value": "build_new",
+        "label": "Build new"
+      },
+      {
+        "value": "apartments_stabilized",
+        "label": "Apartments, rented and full"
+      },
+      {
+        "value": "apartments_value_add",
+        "label": "Apartments that need work"
+      },
+      {
+        "value": "rv_park",
+        "label": "RV park"
+      },
+      {
+        "value": "commercial",
+        "label": "Commercial"
+      }
+    ],
+    "section": "plan",
+    "required_at_send": true,
+    "required_by_engine": true
+  },
+  {
+    "id": "plan_text",
+    "label": "Tell us the plan in your own words",
+    "type": "textarea",
+    "section": "plan",
+    "required_at_send": false,
+    "required_by_engine": false,
+    "help": "A few sentences is fine."
+  },
+  {
+    "id": "arv",
+    "label": "Finished value (ARV)",
+    "type": "money",
+    "section": "value",
+    "required_at_send": true,
+    "required_by_engine": true,
+    "help": "What the property should be worth when the work is done. A best guess is fine."
+  },
+  {
+    "id": "as_is_value",
+    "label": "Value today (as-is)",
+    "type": "money",
+    "section": "value",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "appraisal_value",
+    "label": "Appraisal value",
+    "type": "money",
+    "section": "value",
+    "required_at_send": false,
+    "required_by_engine": false,
+    "help": "You can upload the appraisal after you send."
+  },
+  {
+    "id": "appraisal_date",
+    "label": "Appraisal date",
+    "type": "date",
+    "section": "value",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "arv_source",
+    "label": "How did you get the finished value?",
+    "type": "textarea",
+    "section": "value",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "as_is_source",
+    "label": "How did you get today's value?",
+    "type": "textarea",
+    "section": "value",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "purchase_price",
+    "label": "Purchase price",
+    "type": "money",
+    "section": "costs",
+    "required_at_send": true,
+    "required_by_engine": true
+  },
+  {
+    "id": "budget_total",
+    "label": "Total work budget",
+    "type": "money",
+    "section": "costs",
+    "required_at_send": true,
+    "required_by_engine": true,
+    "help": "The cost of all the repair or building work. Put 0 if there is no work."
+  },
+  {
+    "id": "budget_structure",
+    "label": "Budget: Structure",
+    "type": "money",
+    "section": "costs",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "budget_roof",
+    "label": "Budget: Roof",
+    "type": "money",
+    "section": "costs",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "budget_systems",
+    "label": "Budget: Systems (plumbing, electric, air)",
+    "type": "money",
+    "section": "costs",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "budget_interior",
+    "label": "Budget: Interior",
+    "type": "money",
+    "section": "costs",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "budget_exterior",
+    "label": "Budget: Exterior",
+    "type": "money",
+    "section": "costs",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "budget_soft",
+    "label": "Budget: Soft costs (permits, design)",
+    "type": "money",
+    "section": "costs",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "budget_other",
+    "label": "Budget: Other",
+    "type": "money",
+    "section": "costs",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "closing_costs",
+    "label": "Closing costs",
+    "type": "money",
+    "section": "costs",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "senior_loan_amount",
+    "label": "Senior lender's total loan",
+    "type": "money",
+    "section": "senior",
+    "required_at_send": true,
+    "required_by_engine": true,
+    "help": "The main loan on this deal, from the bank or lender (often your loan)."
+  },
+  {
+    "id": "senior_lender_name",
+    "label": "Senior lender's name",
+    "type": "text",
+    "section": "senior",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "senior_at_closing",
+    "label": "Part paid at closing",
+    "type": "money",
+    "section": "senior",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "senior_held_for_work",
+    "label": "Part held back for the work",
+    "type": "money",
+    "section": "senior",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "senior_rate",
+    "label": "Interest rate (%)",
+    "type": "number",
+    "section": "senior",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "senior_points",
+    "label": "Points",
+    "type": "number",
+    "section": "senior",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "senior_months",
+    "label": "Term in months",
+    "type": "number",
+    "section": "senior",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "senior_extension",
+    "label": "Extension terms",
+    "type": "text",
+    "section": "senior",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "interest_reserve",
+    "label": "Is there an interest reserve?",
+    "type": "select",
+    "options": [
+      {
+        "value": "yes",
+        "label": "Yes"
+      },
+      {
+        "value": "no",
+        "label": "No"
+      }
+    ],
+    "section": "senior",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "cash_in_amount",
+    "label": "Cash the borrower is putting in",
+    "type": "money",
+    "section": "cash",
+    "required_at_send": false,
+    "required_by_engine": true,
+    "help": "Put 0 if none."
+  },
+  {
+    "id": "cash_in_use",
+    "label": "Where does that cash go?",
+    "type": "text",
+    "section": "cash",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "projects_finished",
+    "label": "Projects the sponsor has finished",
+    "type": "number",
+    "section": "track",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "projects_local",
+    "label": "Projects in this city or area",
+    "type": "number",
+    "section": "track",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "judgments_liens",
+    "label": "Any judgments or liens?",
+    "type": "textarea",
+    "section": "track",
+    "required_at_send": false,
+    "required_by_engine": false,
+    "help": "Write none if there are none."
+  },
+  {
+    "id": "guarantor_net_worth",
+    "label": "Guarantor's net worth",
+    "type": "money",
+    "section": "track",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "guarantor_cash",
+    "label": "Guarantor's cash on hand",
+    "type": "money",
+    "section": "track",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "entity_type",
+    "label": "Borrowing company type",
+    "type": "select",
+    "options": [
+      {
+        "value": "llc",
+        "label": "LLC"
+      },
+      {
+        "value": "corp",
+        "label": "Corporation"
+      },
+      {
+        "value": "lp",
+        "label": "Limited partnership"
+      },
+      {
+        "value": "trust",
+        "label": "Trust"
+      },
+      {
+        "value": "individual",
+        "label": "Person"
+      },
+      {
+        "value": "other",
+        "label": "Other"
+      }
+    ],
+    "section": "also",
+    "required_at_send": false,
+    "required_by_engine": true
+  },
+  {
+    "id": "other_money",
+    "label": "Other money on the deal",
+    "type": "textarea",
+    "section": "also",
+    "required_at_send": false,
+    "required_by_engine": false,
+    "help": "Seller note, grants, other partners."
+  },
+  {
+    "id": "refi_new_loan_amount",
+    "label": "New loan amount if the exit is a refinance",
+    "type": "money",
+    "section": "also",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "refi_new_loan_rate",
+    "label": "New loan rate (%)",
+    "type": "number",
+    "section": "also",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "files",
+    "label": "Links to your papers (one per line)",
+    "type": "url_list",
+    "section": "also",
+    "required_at_send": false,
+    "required_by_engine": false,
+    "help": "Optional. You can also upload papers after you send."
+  },
+  {
+    "id": "closing_date",
+    "label": "Closing date",
+    "type": "date",
+    "section": "timing",
+    "required_at_send": true,
+    "required_by_engine": true,
+    "help": "A best guess is fine."
+  },
+  {
+    "id": "finish_date",
+    "label": "Work finish date",
+    "type": "date",
+    "section": "timing",
+    "required_at_send": false,
+    "required_by_engine": false
+  },
+  {
+    "id": "exit_plan",
+    "label": "Exit plan",
+    "type": "select",
+    "options": [
+      {
+        "value": "sell",
+        "label": "Sell"
+      },
+      {
+        "value": "refinance",
+        "label": "Refinance"
+      },
+      {
+        "value": "rent",
+        "label": "Rent"
+      }
+    ],
+    "section": "timing",
+    "required_at_send": false,
+    "required_by_engine": true
+  }
+]

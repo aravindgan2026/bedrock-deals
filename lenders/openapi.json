@@ -1,0 +1,424 @@
+{
+ "openapi": "3.0.3",
+ "info": {
+  "title": "Bedrock deal intake",
+  "version": "1.0.0",
+  "description": "Send a real estate deal to Bedrock for review. Bedrock provides gap equity, not loans. Nothing here is an offer to sell securities. Only send facts the person gave you. After sending: Cleo emails a confirmation, Shravaan calls to welcome the sender, and the sender can track the deal at https://deals.mybedrock.app/lenders/#/signin."
+ },
+ "servers": [
+  {
+   "url": "https://peeadabyvpxgxukcevwf.supabase.co/functions/v1"
+  }
+ ],
+ "paths": {
+  "/portal-submit": {
+   "post": {
+    "operationId": "sendDeal",
+    "summary": "Send a deal",
+    "description": "Creates a deal and starts a to-do list. AI tools have stricter limits than the web form (10 per IP per day, 3 per email per day).",
+    "requestBody": {
+     "required": true,
+     "content": {
+      "application/json": {
+       "schema": {
+        "$ref": "#/components/schemas/Deal"
+       }
+      }
+     }
+    },
+    "responses": {
+     "200": {
+      "description": "Reply. ok is false if something is missing or a limit was hit.",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/Reply"
+        }
+       }
+      }
+     }
+    }
+   }
+  }
+ },
+ "components": {
+  "schemas": {
+   "Deal": {
+    "type": "object",
+    "required": [
+     "name",
+     "company",
+     "email",
+     "role",
+     "street",
+     "city",
+     "state",
+     "zip",
+     "plan_type",
+     "arv",
+     "purchase_price",
+     "budget_total",
+     "senior_loan_amount",
+     "closing_date"
+    ],
+    "properties": {
+     "name": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Your name"
+     },
+     "company": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Company"
+     },
+     "email": {
+      "type": "string",
+      "format": "email",
+      "maxLength": 254,
+      "description": "Email"
+     },
+     "role": {
+      "type": "string",
+      "enum": [
+       "loan_officer",
+       "broker",
+       "sponsor"
+      ],
+      "description": "Your role on this deal"
+     },
+     "phone": {
+      "type": "string",
+      "maxLength": 40,
+      "description": "Phone"
+     },
+     "referrer": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Who referred you?. Leave blank if no one did."
+     },
+     "street": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Street address"
+     },
+     "city": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "City"
+     },
+     "state": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "State. Two letters, like FL.",
+      "pattern": "^[A-Za-z]{2}$"
+     },
+     "zip": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "ZIP code",
+      "pattern": "^\\d{5}(-\\d{4})?$"
+     },
+     "property_type": {
+      "type": "string",
+      "enum": [
+       "single_family",
+       "multifamily",
+       "mixed_use",
+       "rv_park",
+       "commercial",
+       "land",
+       "other"
+      ],
+      "description": "Property type"
+     },
+     "sqft": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Square feet"
+     },
+     "units": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Number of units"
+     },
+     "beds": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Bedrooms (homes only)"
+     },
+     "baths": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Bathrooms (homes only)"
+     },
+     "plan_type": {
+      "type": "string",
+      "enum": [
+       "fix_flip",
+       "build_new",
+       "apartments_stabilized",
+       "apartments_value_add",
+       "rv_park",
+       "commercial"
+      ],
+      "description": "What is the plan?"
+     },
+     "plan_text": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "Tell us the plan in your own words. A few sentences is fine."
+     },
+     "arv": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Finished value (ARV). What the property should be worth when the work is done. (US dollars)"
+     },
+     "as_is_value": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Value today (as-is) (US dollars)"
+     },
+     "appraisal_value": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Appraisal value. You can upload the appraisal after you send. (US dollars)"
+     },
+     "appraisal_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Appraisal date"
+     },
+     "arv_source": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "How did you get the finished value?"
+     },
+     "as_is_source": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "How did you get today's value?"
+     },
+     "purchase_price": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Purchase price (US dollars)"
+     },
+     "budget_total": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Total work budget (US dollars)"
+     },
+     "budget_structure": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Budget: Structure (US dollars)"
+     },
+     "budget_roof": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Budget: Roof (US dollars)"
+     },
+     "budget_systems": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Budget: Systems (plumbing, electric, air) (US dollars)"
+     },
+     "budget_interior": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Budget: Interior (US dollars)"
+     },
+     "budget_exterior": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Budget: Exterior (US dollars)"
+     },
+     "budget_soft": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Budget: Soft costs (permits, design) (US dollars)"
+     },
+     "budget_other": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Budget: Other (US dollars)"
+     },
+     "closing_costs": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Closing costs (US dollars)"
+     },
+     "senior_loan_amount": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Senior lender's total loan. The main loan from the bank or lender on this deal. (US dollars)"
+     },
+     "senior_lender_name": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Senior lender's name"
+     },
+     "senior_at_closing": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Part paid at closing (US dollars)"
+     },
+     "senior_held_for_work": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Part held back for the work (US dollars)"
+     },
+     "senior_rate": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Interest rate (%)"
+     },
+     "senior_points": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Points"
+     },
+     "senior_months": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Term in months"
+     },
+     "senior_extension": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Extension terms"
+     },
+     "interest_reserve": {
+      "type": "string",
+      "enum": [
+       "yes",
+       "no"
+      ],
+      "description": "Is there an interest reserve?"
+     },
+     "cash_in_amount": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Cash the borrower is putting in. Put 0 if none. (US dollars)"
+     },
+     "cash_in_use": {
+      "type": "string",
+      "maxLength": 500,
+      "description": "Where does that cash go?"
+     },
+     "projects_finished": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Projects the sponsor has finished"
+     },
+     "projects_local": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Projects in this city or area"
+     },
+     "judgments_liens": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "Any judgments or liens?. Write none if there are none."
+     },
+     "guarantor_net_worth": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Guarantor's net worth (US dollars)"
+     },
+     "guarantor_cash": {
+      "type": "number",
+      "minimum": 0,
+      "description": "Guarantor's cash on hand (US dollars)"
+     },
+     "entity_type": {
+      "type": "string",
+      "enum": [
+       "llc",
+       "corp",
+       "lp",
+       "trust",
+       "individual",
+       "other"
+      ],
+      "description": "Borrowing company type"
+     },
+     "other_money": {
+      "type": "string",
+      "maxLength": 4000,
+      "description": "Other money on the deal. Seller note, grants, other partners."
+     },
+     "refi_new_loan_amount": {
+      "type": "number",
+      "minimum": 0,
+      "description": "New loan amount if the exit is a refinance (US dollars)"
+     },
+     "refi_new_loan_rate": {
+      "type": "number",
+      "minimum": 0,
+      "description": "New loan rate (%)"
+     },
+     "closing_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Closing date"
+     },
+     "finish_date": {
+      "type": "string",
+      "format": "date",
+      "description": "Work finish date"
+     },
+     "exit_plan": {
+      "type": "string",
+      "enum": [
+       "sell",
+       "refinance",
+       "rent"
+      ],
+      "description": "Exit plan"
+     },
+     "files": {
+      "type": "array",
+      "items": {
+       "type": "string",
+       "format": "uri",
+       "pattern": "^https://"
+      },
+      "maxItems": 10,
+      "description": "Optional links to papers, one per link."
+     }
+    }
+   },
+   "Reply": {
+    "type": "object",
+    "properties": {
+     "ok": {
+      "type": "boolean"
+     },
+     "deal_ref": {
+      "type": "string"
+     },
+     "message": {
+      "type": "string"
+     },
+     "field": {
+      "type": "string",
+      "description": "Name of a field that needs fixing, when one does."
+     },
+     "next": {
+      "type": "object",
+      "properties": {
+       "book_call_url": {
+        "type": "string"
+       },
+       "track_url": {
+        "type": "string"
+       }
+      }
+     }
+    }
+   }
+  }
+ }
+}
