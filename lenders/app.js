@@ -8,6 +8,11 @@
   var ALLOWED_EXT = { pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
     xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", csv: "text/csv" };
+  // the type comes from the file name's ending: Windows often reports a .csv as "application/vnd.ms-excel" or gives no type
+  function mimeOf(file) {
+    var ext = String(file.name || "").split(".").pop().toLowerCase();
+    return ALLOWED_EXT[ext] || file.type || "";
+  }
   var STEPS = [["received", "Received"], ["reviewing", "Reviewing"], ["terms_sent", "Terms sent"],
     ["terms_accepted", "Terms accepted"], ["paperwork", "Paperwork and checks"], ["closing", "Closing"],
     ["funded", "Funded"]];
@@ -277,9 +282,9 @@
       staffDealDetail: function (id) { return rpc("staff_deal_detail", { p_deal_id: id }); },
       uploadFile: function (dealId, todoId, file) {
         var c = client(), reg;
-        return rpc("register_upload", { p_deal_id: dealId, p_todo_id: todoId, p_original_name: file.name, p_mime: file.type, p_size_bytes: file.size }).then(function (r) {
+        return rpc("register_upload", { p_deal_id: dealId, p_todo_id: todoId, p_original_name: file.name, p_mime: mimeOf(file), p_size_bytes: file.size }).then(function (r) {
           reg = r || {};
-          return c.storage.from(N.bucket).upload(reg.path, file, { contentType: file.type, upsert: false });
+          return c.storage.from(N.bucket).upload(reg.path, file, { contentType: mimeOf(file), upsert: false });
         }).then(function (r) {
           if (r.error) throw new Error("The upload did not work. Please try again.");
           return authHeader();
@@ -463,7 +468,7 @@
       ["What does \u201cno money down\u201d mean?", "Our investors can fill some or all of the cash your borrower is short. How much depends on the deal."],
       ["Does it cost anything to send a deal?", "No. Sending a deal is free. If we offer terms, they list our service fee, which pays for the setup, legal work and offering papers."],
       ["Do I need an account or a password?", "No account to send a deal. To track it, type your email and we email you a 6-digit code. There is no password."],
-      ["Who will I talk to?", "Shravaan from our team calls to welcome you and talk through the deal."],
+      ["Who will I talk to?", "You can book a welcome call with Shravaan from our team to talk through the deal. The link is on the thank-you page and in our email."],
       ["Who can see my deals?", "Only you (the email you sent the deal from) and the Bedrock team."],
       ["What if I do not have every number?", "Send what you have. A best guess is fine, and the extra questions are optional."]
     ];
@@ -607,7 +612,7 @@
         payload.turnstile_token = ts.token();
         btn.disabled = true; btn.textContent = "Sending...";
         api.submit(payload).then(function (r) {
-          if (r && r.ok) {
+          if (r && r.ok && r.deal_ref) {
             store("del", DRAFT_KEY);
             sess("set", "last_submit", JSON.stringify({ deal_ref: r.deal_ref, book: r.next && r.next.book_call_url, email: payload.email }));
             location.hash = "#/thanks";
@@ -684,7 +689,7 @@
       info.deal_ref ? h("div", { class: "ref" }, h("span", { class: "mute", text: "Your reference" }), h("strong", { text: info.deal_ref })) : null,
       h("div", { class: "card", style: "margin-top:28px" }, h("h2", { text: "What happens next" }),
         h("ol", { class: "next" }, h("li", { text: "You get an email from Cleo that says we have your deal. If you do not see it, look in your spam or junk folder." }),
-          h("li", { text: "Shravaan calls to welcome you and talk through the deal." }),
+          h("li", { text: "Book a welcome call with Shravaan to talk through the deal (link below and in our email)." }),
           h("li", { text: "You track every step, and send papers, on this site." + (info.email ? " To sign in, use the same email: " + info.email + "." : " To sign in, use the same email you just used.") }))),
       h("div", { class: "cta" },
         book ? h("a", { class: "btn", href: book, text: "Book a welcome call", rel: "noopener" }) : null,
@@ -718,6 +723,7 @@
         if (!PREVIEW && CFG.turnstileSiteKey && CFG.turnstileSiteKey.indexOf("__") < 0 && !ts.token()) { status.appendChild(msg("Please finish the safety check.", "error")); return; }
         email = v; btn.disabled = true; btn.textContent = "Sending...";
         api.start(v, ts.token(), nm.value.trim(), co.value.trim()).then(function (r) {
+          if (r && r.ok === false && r.reason === "rate") { btn.disabled = false; btn.textContent = "Email me a code"; status.appendChild(msg(r.message, "error")); return; }
           step = 2; showCode((r && r.message) || "If you sent us a deal with this email, or we already know you, a code is on its way.");
         }).catch(function () { btn.disabled = false; btn.textContent = "Email me a code"; status.appendChild(msg("That did not work. Please try again.", "error")); });
       });
@@ -734,7 +740,7 @@
         api.start(email, ts.token(), "", "").then(function (r) {
           status.appendChild(msg((r && r.message) || "If you sent us a deal with this email, or we already know you, a new code is on its way."));
         }).catch(function () { status.appendChild(msg("That did not work. Please wait a minute and try again.", "error")); })
-          .then(function () { setTimeout(function () { resend.disabled = false; }, 30000); });
+          .then(function () { setTimeout(function () { resend.disabled = false; }, 60000); });
       });
       var f = h("form", { novalidate: true }, h("label", { for: "si_code", text: "The 6-digit code sent to " + email, style: "margin-top:0" }), code,
         h("span", { class: "help", text: "The email comes from Cleo at Bedrock. Not there? Look in your spam or junk folder." }), status,

@@ -26,7 +26,7 @@ Rate limits for AI tools are stricter than for the web form. If a call is refuse
 ## What happens next
 
 1. Cleo, Bedrock's assistant, emails the person to say the deal was received.
-2. Shravaan from Bedrock calls to welcome them and talk through the deal.
+2. They can book a welcome call with Shravaan from Bedrock to talk through the deal (the link is in the reply and the confirmation email).
 3. The person can track every step, see what Bedrock still needs, and upload papers at:
    https://deals.mybedrock.app/lenders/#/signin
    They sign in with their email and a code.
