@@ -83,7 +83,8 @@
   function ageDays(s) { var d = new Date(s); return isNaN(d) ? 0 : Math.max(0, Math.floor((Date.now() - d.getTime()) / 864e5)); }
   function stepLabel(k) { if (k === "complete") return "Complete"; for (var i = 0; i < STEPS.length; i++) if (STEPS[i][0] === k) return STEPS[i][1]; return k === "not_moving_forward" ? "Not moving forward" : String(k || ""); }
   function stepIndex(k) { if (k === "complete") return STEPS.length - 1; for (var i = 0; i < STEPS.length; i++) if (STEPS[i][0] === k) return i; return -1; }
-  function goodUrl(u) { return typeof u === "string" && /^https:\/\//.test(u) && u.indexOf("__") < 0; }
+  function goodUrl(u) { return typeof u === "string" && /^https:\/\//.test(u) && u.indexOf("__") < 0; }  // config values (catches unfilled __PLACEHOLDER__)
+  function httpsUrl(u) { return typeof u === "string" && /^https:\/\/\S+$/.test(u); }  // signed links can hold "__" by chance (11-24 W14)
   function money(v) {
     if (v == null || v === "") return "";
     var n = Number(v);
@@ -164,6 +165,7 @@
       session: function () { return wait(cur ? { user: { id: cur.id, email: cur.email }, name: cur.name, isStaff: cur.staff, aal: "aal2" } : null); },
       start: function (email) {
         var e = String(email || "").toLowerCase();
+        if (/\.c$/.test(e)) return wait({ ok: false, message: "Please enter a valid email." });
         if (!users[e] && !requests.some(function (r) { return r.email === e; })) requests.push({ id: "r" + (++seq), email: e, name: "", company: "", created_at: iso(0), status: "waiting" });
         return wait({ ok: true, message: "If you sent us a deal with this email, or we already know you, a code is on its way. If not, our team will look at your request and email you." });
       },
@@ -174,6 +176,7 @@
       },
       signOut: function () { cur = null; sess("del", "fake_user"); return wait(true); },
       submit: function (p) {
+        if (/dup/i.test(String(p.street || ""))) return wait({ ok: true, duplicate: true, changed: /changed/i.test(String(p.street)), deal_ref: "BR-TEST-DUP1" });
         var deal = D({ owner: null, address: [p.street, p.city, p.state, p.zip].filter(Boolean).join(", "), plan_type: p.plan_type, submitted_at: new Date().toISOString(), step: "received", step_date: new Date().toISOString(), submit_email: p.email, submitter_role: p.role, new_sender: true, ledger_deal_key: null, answers: p });
         deal.todos = mkTodos(deal.id, starters);
         if (cur && cur.email === String(p.email).toLowerCase()) deal.owner = cur.id;
@@ -290,7 +293,10 @@
           if (r.error) throw new Error("The upload did not work. Please try again.");
           return authHeader();
         }).then(function (hd) { return fn(N.fn.uploadCheck, { file_id: reg.file_id }, hd); })
-          .then(function (r) { if (r && r.ok === false) throw new Error((r.message) || "We could not accept that file. Try a PDF, picture, Word, Excel or CSV."); return r; });
+          .then(function (r) {
+            if (r && r.ok === false && r.status === "rejected") throw new Error((r.message) || "We could not accept that file. Try a PDF, picture, Word, Excel or CSV.");
+            return { ok: r && r.ok === true, checking: !(r && r.ok === true) };  // 11-24 W16: anything else = the file is stored and still being checked
+          });
       },
       staffListDeals: function () { return rpc("staff_list_deals").then(function (r) { return r || []; }); },
       staffAlerts: function () { return rpc("staff_alerts").then(function (r) { return Array.isArray(r) ? r : []; }); },
@@ -614,13 +620,19 @@
         payload.turnstile_token = ts.token();
         btn.disabled = true; btn.textContent = "Sending...";
         api.submit(payload).then(function (r) {
-          if (r && r.ok && r.deal_ref) {
+          if (r && r.ok === true && r.duplicate) {
+            // 11-24 W1: we already had this deal; keep the draft and say what happened to the new answers
+            btn.disabled = false; btn.textContent = "Send my deal";
+            status.appendChild(msg("We already have this deal (reference " + r.deal_ref + ")." + (r.changed
+              ? " We passed your changed answers to our team, and they will check them."
+              : " Nothing new was sent. To change a number, reply to Cleo's email or write to info@mybedrock.app."), r.changed ? "" : "error"));
+          } else if (r && r.ok === true && r.deal_ref) {
             store("del", DRAFT_KEY);
             sess("set", "last_submit", JSON.stringify({ deal_ref: r.deal_ref, book: r.next && r.next.book_call_url, email: payload.email }));
             location.hash = "#/thanks";
           } else {
             btn.disabled = false; btn.textContent = "Send my deal";
-            var field = r && r.field && inputs[r.field];
+            var field = r && r.field && inputs[r.field === "files_links" ? "files" : r.field];
             if (field) { field.err.textContent = r.message || "Please check this one."; field.input.classList.add("bad"); field.input.focus(); }
             status.appendChild(msg((r && r.message) || "We could not send that just now. Please wait a minute and try again, or email info@mybedrock.app.", "error"));
           }
@@ -646,10 +658,11 @@
     store("set", DRAFT_KEY, JSON.stringify({ v: 1, values: v, saved: Date.now() }));
   }
 
-  function num(s) {
+  function num(s, isMoney) {
     var t = String(s).toLowerCase().replace(/[$,\s]/g, "").replace(/dollars?$/, "");
-    var mult = 1, m = t.match(/^(.*?)(k|thousand|m|mil|million)$/);
+    var mult = 1, m = isMoney ? t.match(/^(.*?)(k|thousand|m|mil|million)$/) : null;  // 11-24 W2: k/m only for money ("12m" months is not 12 million)
     if (m) { t = m[1]; mult = (m[2] === "k" || m[2] === "thousand") ? 1e3 : 1e6; }
+    if (!isMoney) t = t.replace(/%$/, "");
     if (t === "" || !/^-?\d*\.?\d+$/.test(t)) return NaN;
     return Math.round(Number(t) * mult * 100) / 100;
   }
@@ -659,8 +672,8 @@
       var raw = inputs[f.id].input.value.trim(), v = raw;
       if (!raw) { if (f.required_at_send) errors[f.id] = "We need this one."; return; }
       if (f.type === "money" || f.type === "number") {
-        var n = num(raw);
-        if (isNaN(n) || n < 0) { errors[f.id] = "Please type a number, like 250000 or 250k."; return; }
+        var n = num(raw, f.type === "money");
+        if (isNaN(n) || n < 0) { errors[f.id] = f.type === "money" ? "Please type a number, like 250000 or 250k." : "Please type just a number, like 12 or 10.5."; return; }
         if (f.required_at_send && f.type === "money" && n <= 0 && f.id !== "budget_total") { errors[f.id] = "This must be more than zero. A best guess is fine."; return; }
         v = n;
       } else if (f.type === "email") {
@@ -684,6 +697,7 @@
   function thanks() {
     var info = {};
     try { info = JSON.parse(sess("get", "last_submit") || "{}"); } catch (e) { info = {}; }
+    if (!info.deal_ref) { location.replace("#/send"); return; }  // 11-24 W18: nothing was sent from this tab
     var book = goodUrl(info.book) ? info.book : goodUrl(CFG.bookCallUrl) ? CFG.bookCallUrl : null;
     var d = wrap(h("div", { class: "done-mark", "aria-hidden": "true" }),
       h("h1", { text: "We got your deal." }),
@@ -725,7 +739,7 @@
         if (!PREVIEW && CFG.turnstileSiteKey && CFG.turnstileSiteKey.indexOf("__") < 0 && !ts.token()) { status.appendChild(msg("Please finish the safety check.", "error")); return; }
         email = v; btn.disabled = true; btn.textContent = "Sending...";
         api.start(v, ts.token(), nm.value.trim(), co.value.trim()).then(function (r) {
-          if (r && r.ok === false && r.reason === "rate") { btn.disabled = false; btn.textContent = "Email me a code"; status.appendChild(msg(r.message, "error")); return; }
+          if (!r || r.ok !== true) { btn.disabled = false; btn.textContent = "Email me a code"; status.appendChild(msg((r && r.message) || "That did not work. Please try again.", "error")); return; }  // 11-24 W4
           step = 2; showCode((r && r.message) || "If you sent us a deal with this email, or we already know you, a code is on its way.");
         }).catch(function () { btn.disabled = false; btn.textContent = "Email me a code"; status.appendChild(msg("That did not work. Please try again.", "error")); });
       });
@@ -770,7 +784,7 @@
   function dealsScreen() {
     if (!SESSION) return needSignIn();
     setMain(wrap(h("h1", { text: "My deals" }), h("p", { class: "mute", text: "Loading..." })), "My deals");
-    api.myDeals().then(function (rows) {
+    api.claimDeals().catch(function () { }).then(function () { return api.myDeals(); }).then(function (rows) {  // 11-24 W3: a deal sent while signed in shows up
       var list = h("div", { class: "cards" });
       (rows || []).forEach(function (d) {
         var stopped = d.step === "not_moving_forward", a = splitAddr(d.address);
@@ -829,7 +843,7 @@
         var f2 = file;
         if (!file.type || file.type !== ALLOWED_EXT[ext]) { try { f2 = new File([file], file.name, { type: ALLOWED_EXT[ext] }); } catch (e) { f2 = file; } }
         status.className = "upl-status mute"; status.textContent = "Uploading " + file.name + "...";
-        api.uploadFile(dealId, t.id, f2).then(function () { status.textContent = "Got it. Thank you."; refresh(); })
+        api.uploadFile(dealId, t.id, f2).then(function (r) { status.textContent = r && r.checking ? "We have the file and are checking it." : "Got it. Thank you."; refresh(); })
           .catch(function (e) { status.className = "upl-status err"; status.textContent = (e && e.message) || "The upload did not work. Please try again."; });
       });
       body.appendChild(status);
@@ -842,7 +856,8 @@
     if (!SESSION) return needSignIn();
     setMain(wrap(h("p", { class: "mute", text: "Loading..." })), "Deal");
     loadForm().then(function () { return api.dealDetail(id); }).then(function (data) {
-      var d = data.deal, stopped = d.step === "not_moving_forward", an = data.answers || {};
+      var d = data.deal, stopped = d.step === "not_moving_forward", an = Object.assign({}, data.answers || {});
+      if (an.files == null && an.files_links != null) an.files = an.files_links;  // 11-24 W19: the server saves the links as files_links
       if (!d.address) d.address = [an.street, an.city, [an.state, an.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
       if (!d.plan_type) d.plan_type = an.plan_type;
       var a = splitAddr(d.address);
@@ -1039,10 +1054,13 @@
     data.files.forEach(function (f) {
       var canOpen = f.check_status === "ok";
       var b = h("button", { class: "btn small ghost", type: "button", text: canOpen ? "Open" : "Not checked yet", disabled: !canOpen, onclick: function () {
+        var w = window.open("", "_blank");  // 11-24 W8: open the tab inside the click so Safari does not block it
         api.staffOpenFile(f.id).then(function (r) {
-          if (r && r.url && goodUrl(r.url)) window.open(r.url, "_blank", "noopener");
-          else status.replaceChildren(msg(r && r.fake ? "Preview: a real file would open here." : "Could not open that file.", r && r.fake ? "" : "error"));
-        });
+          if (r && r.url && httpsUrl(r.url) && w) { try { w.opener = null; } catch (e) { } w.location.href = r.url; return; }
+          if (w) w.close();
+          if (r && r.url && httpsUrl(r.url)) { window.open(r.url, "_blank", "noopener"); return; }
+          status.replaceChildren(msg(r && r.fake ? "Preview: a real file would open here." : "Could not open that file.", r && r.fake ? "" : "error"));
+        }).catch(function () { if (w) w.close(); status.replaceChildren(msg("Could not open that file.", "error")); });
       } });
       root.appendChild(h("div", { class: "ctl", style: "justify-content:space-between" }, h("span", { class: "small", style: "overflow-wrap:anywhere" }, f.original_name + " ", h("span", { class: "pill" + (canOpen ? " g" : " y"), text: canOpen ? "Checked" : f.check_status })), b));
     });
