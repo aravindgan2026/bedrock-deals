@@ -193,7 +193,7 @@
         var e = String(email || "").toLowerCase();
         if (/\.c$/.test(e)) return wait({ ok: false, message: "Please enter a valid email." });
         if (!users[e] && !requests.some(function (r) { return r.email === e; })) requests.push({ id: "r" + (++seq), email: e, name: "", company: "", created_at: iso(0), status: "waiting" });
-        return wait({ ok: true, message: "If you sent us a deal with this email, or we already know you, a code is on its way. If not, our team will look at your request and email you." });
+        return wait({ ok: true, message: "If we know this email, a 6-digit code is on its way from Cleo at Bedrock. It takes about a minute. Teammates of a lender we work with get one too. No code after 5 minutes? We may not have this email yet. Send us a deal with it (no sign-in needed) and you can sign in right after, or email info@mybedrock.app and a person will let you in." });
       },
       verifyCode: function (email, code) {
         var u = users[String(email || "").toLowerCase()];
@@ -816,7 +816,7 @@
           function () { ts.used(); return { ok: false, message: "The safety check did not load. Please press the button again." }; }).then(function (r) {
           if (!r || r.ok !== true) { btn.disabled = false; btn.textContent = "Email me a code"; status.appendChild(msg((r && r.message) || "That did not work. Please try again.", "error")); return; }  // 11-24 W4
           track("lp_signin_code_asked");
-          step = 2; showCode((r && r.message) || "If you sent us a deal with this email, or we already know you, a code is on its way.");
+          step = 2; showCode((r && r.message) || "If we know this email, a code is on its way.");
         }).catch(function () { btn.disabled = false; btn.textContent = "Email me a code"; status.appendChild(msg("That did not work. Please try again.", "error")); });
       });
       box.replaceChildren(); add(box, [note ? msg(note) : null, f]);
@@ -831,12 +831,12 @@
         status.replaceChildren(); resend.disabled = true;
         ts.get().then(function (tok) { ts.used(); return api.start(email, tok, "", ""); },
           function () { ts.used(); return { ok: false, message: "The safety check did not load. Please press the button again in a minute." }; }).then(function (r) {
-          status.appendChild(msg((r && r.message) || "If you sent us a deal with this email, or we already know you, a new code is on its way.", r && r.ok === false ? "error" : ""));
+          status.appendChild(msg((r && r.message) || "If we know this email, a new code is on its way.", r && r.ok === false ? "error" : ""));
         }).catch(function () { status.appendChild(msg("That did not work. Please wait a minute and try again.", "error")); })
           .then(function () { setTimeout(function () { resend.disabled = false; }, 60000); });
       });
       var f = h("form", { novalidate: true }, h("label", { for: "si_code", text: "The 6-digit code sent to " + email, style: "margin-top:0" }), code,
-        h("span", { class: "help", text: "The email comes from Cleo at Bedrock. Not there? Look in your spam or junk folder." }), status,
+        h("span", { class: "help", text: "The email comes from Cleo at Bedrock. Not there in 5 minutes? Look in spam or junk. Still nothing? We may not have this email yet: send us a deal with it, or email info@mybedrock.app." }), status,
         h("div", { style: "margin-top:16px" }, btn),
         h("div", { class: "code-links" }, resend, h("button", { class: "linkbtn", type: "button", text: "Use a different email", onclick: function () { showEmail(); } })));
       code.addEventListener("input", function () { code.value = code.value.replace(/\D/g, "").slice(0, 6); });
