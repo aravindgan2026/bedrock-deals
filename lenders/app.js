@@ -233,7 +233,7 @@
     return "Something went wrong. Try again.";
   }
   function makeReal() {
-    var N = { rpcPrefix: "portal_", fn: { start: "portal-start", submit: "portal-submit", uploadCheck: "portal-upload-check", fileOpen: "portal-file-open" }, bucket: "portal-files" };
+    var N = { rpcPrefix: "portal_", fn: { start: "portal-start", submit: "portal-submit", challenge: "portal-challenge", uploadCheck: "portal-upload-check", fileOpen: "portal-file-open" }, bucket: "portal-files" };
     var sb = null;
     function client() {
       if (sb) return sb;
@@ -279,6 +279,7 @@
       },
       signOut: function () { return client().auth.signOut(); },
       submit: function (payload) { return fn(N.fn.submit, payload); },
+      challenge: function () { return fn(N.fn.challenge, {}); },
       claimDeals: function () { return rpc("claim_my_deals"); },
       updateProfile: function (name, phone) { return rpc("update_my_profile", { p_name: name, p_phone: phone }); },
       myDeals: function () { return rpc("my_deals").then(function (r) { return r || []; }); },
@@ -350,18 +351,58 @@
     });
     return tsLoading;
   }
-  // gives { el, token() }
+  /* our own robot check (11-25): a hidden puzzle the browser solves by itself in about a second, no box to click.
+     The server sends sha256(salt + secret number); we try numbers until one matches. Each answer works once. */
+  function sha256hex(t) {
+    return crypto.subtle.digest("SHA-256", new TextEncoder().encode(t)).then(function (d) {
+      return Array.prototype.map.call(new Uint8Array(d), function (b) { return ("0" + b.toString(16)).slice(-2); }).join("");
+    });
+  }
+  function solvePuzzle(c) {
+    var max = Math.min(Number(c.maxnumber) || 0, 1000000), i = 0;
+    function step() {
+      var batch = [];
+      for (var k = 0; k < 500 && i <= max; k++, i++) batch.push(i);
+      if (!batch.length) return Promise.reject(new Error("unsolved"));
+      return Promise.all(batch.map(function (n) { return sha256hex(c.salt + n); })).then(function (hs) {
+        var j = hs.indexOf(c.challenge);
+        if (j >= 0) return "pow." + btoa(JSON.stringify({ challenge: c.challenge, number: batch[j], salt: c.salt, signature: c.signature }));
+        return step();
+      });
+    }
+    return step();
+  }
+  // gives { el, get() -> Promise(token), used() }: get() waits for the check; used() after every send (an answer works once)
   function turnstileBox() {
     var box = h("div", { class: "tswrap" });
-    var token = "";
-    if (PREVIEW) { token = "preview"; return { el: box, token: function () { return token; } }; }
+    if (PREVIEW) return { el: box, get: function () { return Promise.resolve("preview"); }, used: function () {} };
     var key = CFG.turnstileSiteKey;
     if (key && key.indexOf("__") < 0) {
+      var token = "";
       loadTurnstile().then(function () {
         window.turnstile.render(box, { sitekey: key, callback: function (t) { token = t; }, "expired-callback": function () { token = ""; } });
       }).catch(function () { box.textContent = "The safety check could not load. Please refresh."; });
+      return { el: box,
+        get: function () { return token ? Promise.resolve(token) : Promise.reject(new Error("check")); },
+        used: function () { token = ""; try { window.turnstile.reset(box); } catch (e) { /* not loaded */ } } };
     }
-    return { el: box, token: function () { return token; } };
+    var job = null, at = 0;
+    function start() {
+      at = Date.now();
+      job = api.challenge().then(function (c) {
+        if (!c || c.ok !== true || !c.challenge) throw new Error("check");
+        return solvePuzzle(c);
+      });
+      job.catch(function () { job = null; });
+      return job;
+    }
+    if (window.crypto && crypto.subtle) start();
+    return { el: box,
+      get: function () {
+        if (!(window.crypto && crypto.subtle)) return Promise.resolve("");  // very old browser: sent like an AI tool
+        return job && Date.now() - at < 15 * 60 * 1000 ? job : start();      // answers expire after 20 minutes
+      },
+      used: function () { job = null; } };
   }
 
   /* ---------- shell: nav, banner ---------- */
@@ -612,14 +653,17 @@
           firstBad.scrollIntoView({ behavior: "smooth", block: "center" });
           return;
         }
-        if (!PREVIEW && CFG.turnstileSiteKey && CFG.turnstileSiteKey.indexOf("__") < 0 && !ts.token()) {
-          status.appendChild(msg("Please finish the safety check above, then press Send.", "error")); return;
-        }
         var payload = res.values;
         payload.form_version = "v1";
-        payload.turnstile_token = ts.token();
         btn.disabled = true; btn.textContent = "Sending...";
-        api.submit(payload).then(function (r) {
+        ts.get().then(function (tok) {
+          payload.turnstile_token = tok; ts.used();
+          return api.submit(payload);
+        }, function () {
+          ts.used();
+          return { ok: false, message: CFG.turnstileSiteKey && CFG.turnstileSiteKey.indexOf("__") < 0
+            ? "Please finish the safety check above, then press Send." : "The safety check did not load. Please press Send again." };
+        }).then(function (r) {
           if (r && r.ok === true && r.duplicate) {
             // 11-24 W1: we already had this deal; keep the draft and say what happened to the new answers
             btn.disabled = false; btn.textContent = "Send my deal";
@@ -736,9 +780,9 @@
         ev.preventDefault(); status.replaceChildren();
         var v = em.value.trim();
         if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)) { status.appendChild(msg("Please type your email.", "error")); return; }
-        if (!PREVIEW && CFG.turnstileSiteKey && CFG.turnstileSiteKey.indexOf("__") < 0 && !ts.token()) { status.appendChild(msg("Please finish the safety check.", "error")); return; }
         email = v; btn.disabled = true; btn.textContent = "Sending...";
-        api.start(v, ts.token(), nm.value.trim(), co.value.trim()).then(function (r) {
+        ts.get().then(function (tok) { ts.used(); return api.start(v, tok, nm.value.trim(), co.value.trim()); },
+          function () { ts.used(); return { ok: false, message: "The safety check did not load. Please press the button again." }; }).then(function (r) {
           if (!r || r.ok !== true) { btn.disabled = false; btn.textContent = "Email me a code"; status.appendChild(msg((r && r.message) || "That did not work. Please try again.", "error")); return; }  // 11-24 W4
           step = 2; showCode((r && r.message) || "If you sent us a deal with this email, or we already know you, a code is on its way.");
         }).catch(function () { btn.disabled = false; btn.textContent = "Email me a code"; status.appendChild(msg("That did not work. Please try again.", "error")); });
@@ -753,8 +797,9 @@
       var resend = h("button", { class: "linkbtn", type: "button", text: "Send me a new code" });
       resend.addEventListener("click", function () {
         status.replaceChildren(); resend.disabled = true;
-        api.start(email, ts.token(), "", "").then(function (r) {
-          status.appendChild(msg((r && r.message) || "If you sent us a deal with this email, or we already know you, a new code is on its way."));
+        ts.get().then(function (tok) { ts.used(); return api.start(email, tok, "", ""); },
+          function () { ts.used(); return { ok: false, message: "The safety check did not load. Please press the button again in a minute." }; }).then(function (r) {
+          status.appendChild(msg((r && r.message) || "If you sent us a deal with this email, or we already know you, a new code is on its way.", r && r.ok === false ? "error" : ""));
         }).catch(function () { status.appendChild(msg("That did not work. Please wait a minute and try again.", "error")); })
           .then(function () { setTimeout(function () { resend.disabled = false; }, 60000); });
       });
