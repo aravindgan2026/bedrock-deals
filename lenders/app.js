@@ -58,6 +58,32 @@
     el.appendChild(c.nodeType ? c : document.createTextNode(String(c)));
   }
   function $(s, r) { return (r || document).querySelector(s); }
+  /* usage tracking (11-26, operator "use posthog for tracking"): PostHog, same project as mybedrock.app, sent straight
+     to its capture address (no outside script). Anonymous: a random id per browser, no emails, no names, no answers,
+     no deal numbers; deal ids are cut from page addresses. Staff and the practice copy are never tracked. */
+  var PH_HOST = "https://us.i.posthog.com", phId = null;
+  function phAnon() {
+    if (phId) return phId;
+    try { phId = window.localStorage.getItem("bd_ph_id"); } catch (e) { /* blocked */ }
+    if (!phId) {
+      phId = "lp-" + Array.prototype.map.call(crypto.getRandomValues(new Uint8Array(12)), function (b) { return ("0" + b.toString(16)).slice(-2); }).join("");
+      try { window.localStorage.setItem("bd_ph_id", phId); } catch (e) { /* blocked */ }
+    }
+    return phId;
+  }
+  function track(event, props) {
+    try {
+      var key = CFG.posthogKey;
+      if (PREVIEW || !key || key.indexOf("__") === 0 || (SESSION && SESSION.isStaff) || /^#\/staff/.test(location.hash)) return;
+      var path = (location.hash || "#/").replace(/\/deal\/[^/?#]+/, "/deal/:id");
+      var body = JSON.stringify({ api_key: key, event: event, distinct_id: phAnon(), timestamp: new Date().toISOString(),
+        properties: Object.assign({ $current_url: location.origin + location.pathname + path, $pathname: location.pathname + path,
+          $process_person_profile: false, site: "lenders", signed_in: !!SESSION, $referrer: document.referrer || "$direct" }, props || {}) });
+      if (navigator.sendBeacon && navigator.sendBeacon(PH_HOST + "/i/v0/e/", new Blob([body], { type: "text/plain" }))) return;
+      fetch(PH_HOST + "/i/v0/e/", { method: "POST", body: body, keepalive: true, headers: { "Content-Type": "text/plain" } }).catch(function () {});
+    } catch (e) { /* tracking never breaks the page */ }
+  }
+
   function store(op, k, v) {
     try {
       if (op === "get") return window.localStorage.getItem(k);
@@ -648,6 +674,7 @@
         if (firstBad) {
           var det = firstBad.closest("details"); if (det) det.open = true;
           var n = Object.keys(res.errors).length;
+          track("lp_send_blocked", { fields: Object.keys(res.errors), count: n });
           status.appendChild(msg(n === 1 ? "One box needs a fix. It is marked in red." : n + " boxes need a fix. They are marked in red.", "error"));
           firstBad.focus({ preventScroll: true });
           firstBad.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -656,7 +683,9 @@
         var payload = res.values;
         payload.form_version = "v1";
         btn.disabled = true; btn.textContent = "Sending...";
+        var t0 = Date.now();
         ts.get().then(function (tok) {
+          track("lp_robot_check", { ok: !!tok, ms: Date.now() - t0, where: "send" });
           payload.turnstile_token = tok; ts.used();
           return api.submit(payload);
         }, function () {
@@ -664,6 +693,8 @@
           return { ok: false, message: CFG.turnstileSiteKey && CFG.turnstileSiteKey.indexOf("__") < 0
             ? "Please finish the safety check above, then press Send." : "The safety check did not load. Please press Send again." };
         }).then(function (r) {
+          track("lp_send_result", { result: r && r.ok === true ? (r.duplicate ? "duplicate" : "sent") : "refused",
+            reason: (r && r.reason) || null, field: (r && r.field) || null, ai_choice_rent: payload.exit_plan === "rent" });
           if (r && r.ok === true && r.duplicate) {
             // 11-24 W1: we already had this deal; keep the draft and say what happened to the new answers
             btn.disabled = false; btn.textContent = "Send my deal";
@@ -784,6 +815,7 @@
         ts.get().then(function (tok) { ts.used(); return api.start(v, tok, nm.value.trim(), co.value.trim()); },
           function () { ts.used(); return { ok: false, message: "The safety check did not load. Please press the button again." }; }).then(function (r) {
           if (!r || r.ok !== true) { btn.disabled = false; btn.textContent = "Email me a code"; status.appendChild(msg((r && r.message) || "That did not work. Please try again.", "error")); return; }  // 11-24 W4
+          track("lp_signin_code_asked");
           step = 2; showCode((r && r.message) || "If you sent us a deal with this email, or we already know you, a code is on its way.");
         }).catch(function () { btn.disabled = false; btn.textContent = "Email me a code"; status.appendChild(msg("That did not work. Please try again.", "error")); });
       });
@@ -813,6 +845,7 @@
         if (!code.value.trim()) { status.appendChild(msg("Please type the code from your email.", "error")); return; }
         btn.disabled = true; btn.textContent = "Checking...";
         api.verifyCode(email, code.value).then(function (r) {
+          track("lp_signin_result", { ok: !!(r && r.ok) });
           if (!r || !r.ok) { btn.disabled = false; btn.textContent = "Sign in"; status.appendChild(msg((r && r.error) || "That code did not work.", "error")); return; }
           return api.claimDeals().catch(function () { }).then(function () { return api.session(); }).then(function (s) {
             SESSION = s; location.hash = s && s.isStaff ? "#/staff" : "#/deals"; route();
@@ -888,7 +921,7 @@
         var f2 = file;
         if (!file.type || file.type !== ALLOWED_EXT[ext]) { try { f2 = new File([file], file.name, { type: ALLOWED_EXT[ext] }); } catch (e) { f2 = file; } }
         status.className = "upl-status mute"; status.textContent = "Uploading " + file.name + "...";
-        api.uploadFile(dealId, t.id, f2).then(function (r) { status.textContent = r && r.checking ? "We have the file and are checking it." : "Got it. Thank you."; refresh(); })
+        api.uploadFile(dealId, t.id, f2).then(function (r) { track("lp_upload", { ok: !!(r && r.ok), checking: !!(r && r.checking) }); status.textContent = r && r.checking ? "We have the file and are checking it." : "Got it. Thank you."; refresh(); })
           .catch(function (e) { status.className = "upl-status err"; status.textContent = (e && e.message) || "The upload did not work. Please try again."; });
       });
       body.appendChild(status);
@@ -1138,6 +1171,7 @@
   function route() {
     var hash = location.hash || "#/", m;
     setNav();
+    track("$pageview");
     try {
       if (hash === "#/" || hash === "" || hash === "#") return landing();
       if (hash === "#/send") return sendScreen();
