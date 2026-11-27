@@ -170,7 +170,8 @@
       { id: "t" + (++seq), text: "Appraisal", kind: "upload", status: "waiting_check", made_by: "starter", created_at: iso(20) },
       { id: "t" + (++seq), text: "Budget for the work", kind: "upload", status: "done", made_by: "starter", created_at: iso(20) }];
     d3.files = [{ id: "f1", original_name: "budget-fake.pdf", size_bytes: 120000, created_at: iso(10), check_status: "ok", todo_id: d3.todos[3].id },
-      { id: "f2", original_name: "appraisal-fake.pdf", size_bytes: 450000, created_at: iso(3), check_status: "pending", todo_id: d3.todos[2].id }];
+      { id: "f2", original_name: "appraisal-fake.pdf", size_bytes: 450000, created_at: iso(3), check_status: "pending", todo_id: d3.todos[2].id },
+      { id: "f3", original_name: "contract-bad-type.exe", size_bytes: 9000, created_at: iso(2), check_status: "rejected", todo_id: d3.todos[0].id }];
     D({ owner: "u1", address: "77 Pretend Ln, Testburg, OH 44000", plan_type: "fix_flip", submitted_at: iso(30), step: "not_moving_forward", reason_code: "missing_papers", step_date: iso(8), submit_email: "lender1@example.test", submitter_role: "loan_officer", new_sender: false, ledger_deal_key: "FAKE-KEY-77", answers: answers("77 Pretend Ln", "Testburg", "OH", "44000", "fix_flip"),
       notes: [{ id: "n4", text: "We never got the purchase contract. Send it and we will look again. (fake note)", visible_to_lender: true, created_at: iso(8) }] });
     var d5 = D({ owner: "u2", address: "500 Sample Blvd, Faketown, NC 27000", plan_type: "apartments_stabilized", submitted_at: iso(14), step: "reviewing", step_date: iso(12), submit_email: "lender2@example.test", submitter_role: "broker", new_sender: false, ledger_deal_key: null, answers: answers("500 Sample Blvd", "Faketown", "NC", "27000", "apartments_stabilized") });
@@ -178,6 +179,8 @@
     D({ owner: "u2", address: "1 Placeholder Way, Demoville, AZ 85000", plan_type: "commercial", submitted_at: iso(45), step: "closing", step_date: iso(1), submit_email: "lender2@example.test", submitter_role: "broker", new_sender: false, ledger_deal_key: "FAKE-KEY-1", answers: answers("1 Placeholder Way", "Demoville", "AZ", "85000", "commercial") });
     var requests = [{ id: "r1", email: "newperson@example.test", name: "New Person", company: "Fake Capital Group", created_at: iso(1), status: "waiting" },
       { id: "r2", email: "another@example.test", name: "Another Sample", company: "Pretend Lending", created_at: iso(3), status: "waiting" }];
+    var spent = {};  // 11-27 W5: like the real server, a robot-check answer works once
+    function spendToken(t) { if (!t) return false; if (spent[t]) return true; spent[t] = 1; return false; }
     var cur = null;
     try { var saved = sess("get", "fake_user"); if (saved && users[saved]) cur = users[saved]; } catch (e) { /* ignore */ }
     function mine() { return deals.filter(function (d) { return cur && d.owner === cur.id; }); }
@@ -185,12 +188,17 @@
     function wait(v) { return new Promise(function (res) { setTimeout(function () { res(v); }, 120); }); }
     function row(d) {
       return { id: d.id, deal_id: d.id, address: d.address, plan_type: d.plan_type, submitted_at: d.submitted_at, step: d.step, step_date: d.step_date,
-        reason_code: d.reason_code || null, open_todo_count: d.todos.filter(function (t) { return t.status === "open"; }).length };
+        reason_code: d.reason_code || null, ledger_deal_key: d.ledger_deal_key || null, open_todo_count: d.todos.filter(function (t) { return t.status === "open"; }).length };
     }
     return {
-      session: function () { return wait(cur ? { user: { id: cur.id, email: cur.email }, name: cur.name, isStaff: cur.staff, aal: "aal2" } : null); },
-      start: function (email) {
+      session: function () {
+        // preview: add ?profilefail=1 to see what a failed profile call looks like (real rule: friendly message kept on the session)
+        if (cur && /[?&]profilefail=1/.test(location.search)) return wait({ user: { id: cur.id, email: cur.email }, name: "", isStaff: false, aal: "aal1", profileError: "Back soon." });
+        return wait(cur ? { user: { id: cur.id, email: cur.email }, name: cur.name, isStaff: cur.staff, aal: "aal2" } : null);
+      },
+      start: function (email, token) {
         var e = String(email || "").toLowerCase();
+        if (spendToken(token)) return wait({ ok: false, message: "The safety check did not go through. Please try again." });
         if (/\.c$/.test(e)) return wait({ ok: false, message: "Please enter a valid email." });
         if (!users[e] && !requests.some(function (r) { return r.email === e; })) requests.push({ id: "r" + (++seq), email: e, name: "", company: "", created_at: iso(0), status: "waiting" });
         return wait({ ok: true, message: "If we know this email, a 6-digit code is on its way from Cleo at Bedrock. It takes about a minute. Teammates of a lender we work with get one too. No code after 5 minutes? We may not have this email yet. Send us a deal with it (no sign-in needed) and you can sign in right after, or email info@mybedrock.app and a person will let you in." });
@@ -202,6 +210,7 @@
       },
       signOut: function () { cur = null; sess("del", "fake_user"); return wait(true); },
       submit: function (p) {
+        if (spendToken(p.turnstile_token)) return wait({ ok: false, message: "The safety check did not go through. Please try again." });
         if (/dup/i.test(String(p.street || ""))) return wait({ ok: true, duplicate: true, changed: /changed/i.test(String(p.street)), deal_ref: "BR-TEST-DUP1" });
         var deal = D({ owner: null, address: [p.street, p.city, p.state, p.zip].filter(Boolean).join(", "), plan_type: p.plan_type, submitted_at: new Date().toISOString(), step: "received", step_date: new Date().toISOString(), submit_email: p.email, submitter_role: p.role, new_sender: true, ledger_deal_key: null, answers: p });
         deal.todos = mkTodos(deal.id, starters);
@@ -292,7 +301,9 @@
           return rpc("my_profile").then(function (p) {
             p = p || {};
             return { user: { id: s.user.id, email: s.user.email }, name: p.name || "", isStaff: !!p.is_staff, aal: p.aal || "aal1" };
-          }, function () { return { user: { id: s.user.id, email: s.user.email }, name: "", isStaff: false, aal: "aal1" }; });
+          }, function (e) {  // 11-27 W20: keep the error so the page can say what happened instead of "Staff only"
+            return { user: { id: s.user.id, email: s.user.email }, name: "", isStaff: false, aal: "aal1", profileError: (e && e.message) || "Something went wrong. Try again." };
+          });
         });
       },
       start: function (email, token, name, company) {
@@ -398,29 +409,49 @@
     }
     return step();
   }
-  // gives { el, get() -> Promise(token), used() }: get() waits for the check; used() after every send (an answer works once)
+  // gives { el, get() -> Promise(token), used(), ready(), whenReady(cb) }
+  // get() waits for a fresh answer; used() after EVERY call that spent one (an answer works once), then a new one is made.
+  // 11-27 W5: Turnstile is reset after each use and the box stays on the page for the code step; the own puzzle asks for a new one.
   function turnstileBox() {
     var box = h("div", { class: "tswrap" });
-    if (PREVIEW) return { el: box, get: function () { return Promise.resolve("preview"); }, used: function () {} };
+    if (PREVIEW) {
+      var pn = 0, pTok = "preview-" + (++pn);
+      return { el: box, get: function () { if (!pTok) pTok = "preview-" + (++pn); return Promise.resolve(pTok); },
+        used: function () { pTok = ""; },
+        ready: function () { return !!pTok; },
+        whenReady: function (cb) { setTimeout(function () { if (!pTok) pTok = "preview-" + (++pn); cb(); }, 600); } };
+    }
     var key = CFG.turnstileSiteKey;
     if (key && key.indexOf("__") < 0) {
-      var token = "";
+      var token = "", waiters = [], widgetId = null;
+      var give = function (t) { token = t; if (t) { var w = waiters; waiters = []; w.forEach(function (f) { f(t); }); } };
       loadTurnstile().then(function () {
-        window.turnstile.render(box, { sitekey: key, callback: function (t) { token = t; }, "expired-callback": function () { token = ""; } });
+        widgetId = window.turnstile.render(box, { sitekey: key, callback: function (t) { give(t); }, "expired-callback": function () { token = ""; },
+          "error-callback": function () { token = ""; } });
       }).catch(function () { box.textContent = "The safety check could not load. Please refresh."; });
       return { el: box,
-        get: function () { return token ? Promise.resolve(token) : Promise.reject(new Error("check")); },
-        used: function () { token = ""; try { window.turnstile.reset(box); } catch (e) { /* not loaded */ } } };
+        get: function () {
+          if (token) return Promise.resolve(token);
+          return new Promise(function (res, rej) {  // a fresh answer is on its way after a reset: wait up to 15 seconds
+            var done = false;
+            var f = function (t) { if (!done) { done = true; res(t); } };
+            waiters.push(f);
+            setTimeout(function () { if (!done) { done = true; rej(new Error("check")); } }, 15000);
+          });
+        },
+        used: function () { token = ""; try { window.turnstile.reset(widgetId !== null ? widgetId : box); } catch (e) { /* not loaded */ } },
+        ready: function () { return !!token; },
+        whenReady: function (cb) { if (token) return cb(); waiters.push(function () { cb(); }); } };
     }
-    var job = null, at = 0;
+    var job = null, at = 0, solved = false;
     function start() {
-      at = Date.now();
-      job = api.challenge().then(function (c) {
+      at = Date.now(); solved = false;
+      var mine = job = api.challenge().then(function (c) {
         if (!c || c.ok !== true || !c.challenge) throw new Error("check");
         return solvePuzzle(c);
-      });
-      job.catch(function () { job = null; });
-      return job;
+      }).then(function (t) { if (job === mine) solved = true; return t; });
+      mine.catch(function () { if (job === mine) job = null; });
+      return mine;
     }
     if (window.crypto && crypto.subtle) start();
     return { el: box,
@@ -428,7 +459,9 @@
         if (!(window.crypto && crypto.subtle)) return Promise.resolve("");  // very old browser: sent like an AI tool
         return job && Date.now() - at < 15 * 60 * 1000 ? job : start();      // answers expire after 20 minutes
       },
-      used: function () { job = null; } };
+      used: function () { job = null; solved = false; },
+      ready: function () { return solved; },
+      whenReady: function (cb) { if (!(window.crypto && crypto.subtle)) return cb(); this.get().then(function () { cb(); }, function () { cb(); }); } };
   }
 
   /* ---------- shell: nav, banner ---------- */
@@ -439,19 +472,27 @@
     if (SESSION && SESSION.isStaff) items.push(["#/staff", "Staff", ""]);
     items.push(SESSION ? ["#/deals", "My deals", ""] : ["#/signin", "Sign in", ""]);
     items.push(["#/send", "Send a deal", "go"]);
+    var signedIn = !!SESSION;
     nav.replaceChildren();
     items.forEach(function (it) {
       var a = h("a", { href: it[0], text: it[1], class: it[2] || null });
       if (hash.indexOf(it[0]) === 0 || (it[0] === "#/deals" && hash.indexOf("#/deal/") === 0)) a.setAttribute("aria-current", "page");
       nav.appendChild(a);
     });
+    // 11-27 W20: Sign out is always in the top bar when signed in, even if a page failed to load
+    if (signedIn) nav.appendChild(h("button", { type: "button", text: "Sign out", onclick: signOut }));
     var b = $("#banner");
     if (PREVIEW) {
       b.hidden = false;
       b.replaceChildren(h("b", { text: "Preview." }), " Fake data, nothing is sent. Sign in as lender1@example.test (or lender2, or staff) with code 123456.");
     }
   }
-  function signOut() { api.signOut().then(function () { SESSION = null; location.hash = "#/"; route(); }); }
+  // 11-27 W17: every page change gets a number. A late answer from an older page checks it and stays quiet.
+  var ROUTE = 0;
+  function here() { var r = ROUTE; return function () { return r === ROUTE; }; }
+  // go to a page once: the hash change draws it; only draw by hand when the hash is already that page
+  function go(hash) { if (location.hash === hash) route(); else location.hash = hash; }
+  function signOut() { api.signOut().then(function () { SESSION = null; go("#/"); }); }
 
   /* ---------- shared bits ---------- */
   function msg(text, kind) { return h("div", { class: "msg" + (kind ? " " + kind : ""), role: kind === "error" ? "alert" : "status", text: text }); }
@@ -598,10 +639,12 @@
   }
 
   function sendScreen() {
+    var live = here();
     var holder = wrap(h("p", { class: "mute", text: "Loading the form..." }));
     holder.classList.add("narrow");
     setMain(holder, "Send a deal");
     loadForm().then(function (fields) {
+      if (!live()) return;  // 11-27 W17
       var draft = readDraft(), inputs = {};
       if (SESSION && SESSION.user && !draft.email) draft.email = SESSION.user.email;
       var form = h("form", { novalidate: true });
@@ -704,7 +747,7 @@
           } else if (r && r.ok === true && r.deal_ref) {
             store("del", DRAFT_KEY);
             sess("set", "last_submit", JSON.stringify({ deal_ref: r.deal_ref, book: r.next && r.next.book_call_url, email: payload.email }));
-            location.hash = "#/thanks";
+            if (live()) location.hash = "#/thanks";
           } else {
             btn.disabled = false; btn.textContent = "Send my deal";
             var field = r && r.field && inputs[r.field === "files_links" ? "files" : r.field];
@@ -723,7 +766,7 @@
         form);
       page.classList.add("narrow");
       setMain(page, "Send a deal");
-    }).catch(function () { setMain(wrap(msg("The form could not load. Please refresh.", "error")), "Send a deal"); });
+    }).catch(function () { if (live()) setMain(wrap(msg("The form could not load. Please refresh.", "error")), "Send a deal"); });
   }
 
 
@@ -794,9 +837,10 @@
     var step = 1, email = "";
     var box = h("div", { class: "card" });
     var head = h("h1", { text: "Track my deals" }), sub = h("p", { class: "lead", text: "Sign in with your email. We send you a 6-digit code. No password." });
-    var d = wrap(h("div", { class: "signin" }, head, sub, box), helpLine());
-    setMain(d, "Sign in");
+    var live = here();
     var ts = turnstileBox();
+    var d = wrap(h("div", { class: "signin" }, head, sub, box, ts.el), helpLine());  // 11-27 W5: the check stays on the page for both steps
+    setMain(d, "Sign in");
     function showEmail(note) {
       head.textContent = "Track my deals"; sub.textContent = "Sign in with your email. We send you a 6-digit code. No password.";
       var em = h("input", { id: "si_email", type: "email", autocomplete: "email", autocapitalize: "off", spellcheck: "false", value: email, placeholder: "you@company.com" });
@@ -806,7 +850,7 @@
         h("div", null, h("label", { for: "si_name", text: "Your name" }), nm, h("label", { for: "si_co", text: "Company" }), co));
       var status = h("div"), btn = h("button", { class: "btn block", type: "submit", text: "Email me a code" });
       var f = h("form", { novalidate: true }, h("label", { for: "si_email", text: "Your email", style: "margin-top:0" }), em,
-        h("span", { class: "help", text: "Sent us a deal before? Use that same email." }), ts.el, status, h("div", { style: "margin-top:16px" }, btn), more);
+        h("span", { class: "help", text: "Sent us a deal before? Use that same email." }), status, h("div", { style: "margin-top:16px" }, btn), more);
       f.addEventListener("submit", function (ev) {
         ev.preventDefault(); status.replaceChildren();
         var v = em.value.trim();
@@ -827,13 +871,21 @@
       var code = h("input", { id: "si_code", class: "code-in", type: "text", inputmode: "numeric", autocomplete: "one-time-code", maxlength: "6", placeholder: "000000" });
       var status = h("div"), btn = h("button", { class: "btn block", type: "submit", text: "Sign in" });
       var resend = h("button", { class: "linkbtn", type: "button", text: "Send me a new code" });
+      var holdResend = function (spentAt) {  // 11-27 W5: no new send until 60 seconds are over AND a fresh answer exists
+        resend.disabled = true;
+        var cool = false, fresh = false, open = function () { if (cool && fresh) resend.disabled = false; };
+        setTimeout(function () { cool = true; open(); }, Math.max(0, 60000 - (Date.now() - spentAt)));
+        ts.whenReady(function () { fresh = true; open(); });
+      };
+      holdResend(Date.now());  // the first code was just sent, so the same wait applies
       resend.addEventListener("click", function () {
         status.replaceChildren(); resend.disabled = true;
+        var spentAt = Date.now();
         ts.get().then(function (tok) { ts.used(); return api.start(email, tok, "", ""); },
           function () { ts.used(); return { ok: false, message: "The safety check did not load. Please press the button again in a minute." }; }).then(function (r) {
           status.appendChild(msg((r && r.message) || "If we know this email, a new code is on its way.", r && r.ok === false ? "error" : ""));
         }).catch(function () { status.appendChild(msg("That did not work. Please wait a minute and try again.", "error")); })
-          .then(function () { setTimeout(function () { resend.disabled = false; }, 60000); });
+          .then(function () { holdResend(spentAt); });
       });
       var f = h("form", { novalidate: true }, h("label", { for: "si_code", text: "The 6-digit code sent to " + email, style: "margin-top:0" }), code,
         h("span", { class: "help", text: "The email comes from Cleo at Bedrock. Not there in 5 minutes? Look in spam or junk. Still nothing? We may not have this email yet: send us a deal with it, or email info@mybedrock.app." }), status,
@@ -848,7 +900,7 @@
           track("lp_signin_result", { ok: !!(r && r.ok) });
           if (!r || !r.ok) { btn.disabled = false; btn.textContent = "Sign in"; status.appendChild(msg((r && r.error) || "That code did not work.", "error")); return; }
           return api.claimDeals().catch(function () { }).then(function () { return api.session(); }).then(function (s) {
-            SESSION = s; location.hash = s && s.isStaff ? "#/staff" : "#/deals"; route();
+            if (!live()) return; SESSION = s; go(s && s.isStaff ? "#/staff" : "#/deals");
           });
         }).catch(function () { btn.disabled = false; btn.textContent = "Sign in"; status.appendChild(msg("That did not work. Please try again.", "error")); });
       });
@@ -859,10 +911,22 @@
     showEmail();
   }
 
+  // 11-27 W20: the profile call failed, so we do not know who this is. Say so in plain words; Sign out is in the top bar too.
+  function profileProblem(title) {
+    var live = here();
+    var again = h("button", { class: "btn", type: "button", text: "Try again", onclick: function () {
+      api.session().then(function (s) { if (live()) { SESSION = s; route(); } }).catch(function () { });
+    } });
+    setMain(wrap(h("h1", { text: title }), msg(SESSION.profileError, "error"), h("p", { class: "mute", text: "You can try again, or sign out and sign in again." }),
+      h("div", { class: "cta" }, again, " ", h("button", { class: "btn ghost", type: "button", text: "Sign out", onclick: signOut }))), title);
+  }
   function dealsScreen() {
     if (!SESSION) return needSignIn();
+    if (SESSION.profileError) return profileProblem("My deals");
+    var live = here();
     setMain(wrap(h("h1", { text: "My deals" }), h("p", { class: "mute", text: "Loading..." })), "My deals");
     api.claimDeals().catch(function () { }).then(function () { return api.myDeals(); }).then(function (rows) {  // 11-24 W3: a deal sent while signed in shows up
+      if (!live()) return;  // 11-27 W17
       var list = h("div", { class: "cards" });
       (rows || []).forEach(function (d) {
         var stopped = d.step === "not_moving_forward", a = splitAddr(d.address);
@@ -886,7 +950,12 @@
           h("a", { class: "btn small dark", href: "#/send", text: "Send a new deal" })),
         rows && rows.length ? list : h("div", { class: "card empty" }, h("h2", { text: "No deals yet" }), h("p", { text: "Send your first deal. It takes about 3 minutes." }), h("a", { class: "btn", href: "#/send", text: "Send a deal" })));
       setMain(page, "My deals");
-    }).catch(function () { setMain(wrap(msg("We could not load your deals. Please refresh.", "error")), "My deals"); });
+    }).catch(function (e) {
+      if (!live()) return;
+      // 11-27 W20: show the friendly reason ("Back soon.", "Please sign in again.") when we have one; Sign out stays in the top bar
+      var why = e && e.message && /^(Back soon|Please sign in again|This page is for staff)/.test(e.message) ? e.message : "We could not load your deals. Please refresh.";
+      setMain(wrap(msg(why, "error"), h("p", null, h("button", { class: "btn ghost", type: "button", text: "Sign out", onclick: signOut }))), "My deals");
+    });
   }
 
   function labelFor(id) { var f = FORM.filter(function (x) { return x.id === id; })[0]; return f ? f : { label: id, type: "text" }; }
@@ -902,15 +971,21 @@
 
   function todoItem(t, dealId, files, refresh) {
     var st = TODO_STATUS[t.status] || [t.status, ""];
-    var mine = (files || []).filter(function (f) { return f.todo_id === t.id; });
+    // 11-27 W15: only files we accepted count. Rejected ones are shown as "not accepted", waiting ones as "checking".
+    var all = (files || []).filter(function (f) { return f.todo_id === t.id; });
+    var mine = all.filter(function (f) { return f.check_status !== "rejected"; });
     var body = h("div", { class: "todo-body" }, h("div", { class: "todo-title", text: t.text }),
       h("div", { class: "todo-sub", text: t.status === "open" && t.kind === "answer" ? "We will ask you about this. Nothing to upload." : st[0] }));
-    mine.forEach(function (f) { body.appendChild(h("div", { class: "todo-file", text: f.original_name })); });
+    all.forEach(function (f) {
+      var bad = f.check_status === "rejected", wait = f.check_status === "pending";
+      body.appendChild(h("div", { class: "todo-file", style: bad ? "text-decoration:line-through;opacity:.7" : null,
+        text: f.original_name + (bad ? " (not accepted, please send another)" : wait ? " (checking)" : "") }));
+    });
     var li = h("li", { class: "todo-row st-" + t.status }, h("span", { class: "todo-ic", "aria-hidden": "true" }), body);
     if (t.status === "open" && t.kind !== "answer") {
       var input = h("input", { type: "file", id: "up_" + t.id, accept: ".pdf,.jpg,.jpeg,.png,.xlsx,.docx,.csv", style: "position:absolute;left:-9999px", "aria-label": "Upload: " + t.text });
       var status = h("div", { class: "upl-status", role: "status" });
-      var btn = h("label", { class: "btn small ghost", for: "up_" + t.id, style: "margin:0", text: mine.length ? "Add another" : "Upload" });
+      var btn = h("label", { class: "btn small ghost", for: "up_" + t.id, style: "margin:0", text: mine.length ? "Add another" : "Upload" });  // mine = accepted or still checking
       input.addEventListener("change", function () {
         var file = input.files && input.files[0];
         if (!file) return;
@@ -932,8 +1007,11 @@
 
   function dealScreen(id) {
     if (!SESSION) return needSignIn();
+    if (SESSION.profileError) return profileProblem("Deal");
+    var live = here();
     setMain(wrap(h("p", { class: "mute", text: "Loading..." })), "Deal");
     loadForm().then(function () { return api.dealDetail(id); }).then(function (data) {
+      if (!live()) return;  // 11-27 W17: the person already went to another page
       var d = data.deal, stopped = d.step === "not_moving_forward", an = Object.assign({}, data.answers || {});
       if (an.files == null && an.files_links != null) an.files = an.files_links;  // 11-24 W19: the server saves the links as files_links
       if (!d.address) d.address = [an.street, an.city, [an.state, an.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ");
@@ -942,7 +1020,7 @@
       var open = data.todos.filter(function (t) { return t.status === "open" || t.status === "waiting_check"; });
       var done = data.todos.filter(function (t) { return t.status === "done" || t.status === "waived"; });
       var needs = open.filter(function (t) { return t.status === "open"; }).length;
-      var refresh = function () { dealScreen(id); };
+      var refresh = function () { if (live()) dealScreen(id); };  // an upload that ends late must not redraw over another page
       var todoCard = h("div", { class: "card" },
         h("h2", { text: "What we need from you" }),
         h("p", { class: "card-sub", text: needs ? (needs === 1 ? "1 thing needs you." : needs + " things need you.") + (open.some(function (t) { return t.status === "open" && t.kind !== "answer"; }) ? " PDF, picture, Word, Excel or CSV, up to 25 MB." : "") : "Nothing right now. Thank you." }),
@@ -975,6 +1053,7 @@
         h("div", { class: "deal-grid" }, h("div", { class: "side" }, stepCard), h("div", { class: "main" }, todoCard, noteCard, sent)));
       setMain(page, d.address || "Deal");
     }).catch(function (e) {
+      if (!live()) return;
       setMain(wrap(msg((e && e.message) || "We could not load that deal.", "error"), h("a", { class: "back", href: "#/deals", text: "My deals" })), "Deal");
     });
   }
@@ -982,21 +1061,26 @@
   /* ---------- staff ---------- */
   function staffScreen() {
     if (!SESSION) return needSignIn();
+    if (SESSION.profileError) return profileProblem("Staff");
     if (!SESSION.isStaff) return setMain(wrap(h("h1", { text: "Staff only" }), h("p", { text: "This page is for Bedrock staff." })), "Staff");
+    var live = here();
     setMain(wrap(h("p", { text: "Loading..." })), "Staff");
     api.staffMfa().then(function (m) {
+      if (!live()) return;  // 11-27 W17
       if (m && m.needed) return staffMfaScreen(m);
       var alerts = api.staffAlerts().catch(function () { return [{ key: "alerts_unread", text: "The problem list could not load. Try again in a minute." }]; });
-      return Promise.all([loadForm(), api.staffListDeals(), api.staffRequests(), alerts]).then(function (a) { staffBoard(a[1] || [], a[2] || [], a[3] || []); });
-    }).catch(function (e) { setMain(wrap(msg((e && e.message) || "We could not load the staff page.", "error")), "Staff"); });
+      return Promise.all([loadForm(), api.staffListDeals(), api.staffRequests(), alerts]).then(function (a) { if (live()) staffBoard(a[1] || [], a[2] || [], a[3] || []); });
+    }).catch(function (e) { if (!live()) return; setMain(wrap(msg((e && e.message) || "We could not load the staff page.", "error")), "Staff"); });
   }
   function staffMfaSetup() {
     var box = h("div", { class: "card" }, h("p", { class: "mute", text: "Getting your setup ready..." }));
     var page = wrap(h("h1", { text: "Set up your second check" }),
       h("p", { class: "lead", text: "Staff pages need a code from an app on your phone. You do this once." }), box, helpLine());
     page.classList.add("narrow");
+    var live = here();
     setMain(page, "Staff");
     api.mfaEnroll().then(function (e) {
+      if (!live()) return;  // 11-27 W17: no second setup box if the page was drawn twice
       var code = h("input", { type: "text", class: "code-in", inputmode: "numeric", autocomplete: "one-time-code", maxlength: "6", id: "mfa_new", placeholder: "000000" });
       code.addEventListener("input", function () { code.value = code.value.replace(/\D/g, "").slice(0, 6); });
       var status = h("div"), btn = h("button", { class: "btn block", type: "submit", text: "Finish setup" });
@@ -1012,7 +1096,7 @@
         ev.preventDefault(); status.replaceChildren();
         if (code.value.length !== 6) { status.appendChild(msg("Please type the 6-digit code from the app.", "error")); return; }
         btn.disabled = true; btn.textContent = "Checking...";
-        api.mfaEnrollVerify(e.factorId, code.value).then(function () { return api.session(); }).then(function (s) { SESSION = s; staffScreen(); })
+        api.mfaEnrollVerify(e.factorId, code.value).then(function () { return api.session(); }).then(function (s) { SESSION = s; if (live()) staffScreen(); })
           .catch(function (er) { btn.disabled = false; btn.textContent = "Finish setup"; status.appendChild(msg((er && er.message) || "That code did not work.", "error")); });
       });
       box.replaceChildren(f);
@@ -1065,7 +1149,7 @@
       listEl.replaceChildren();
       var shown = rows.filter(function (d) { return filter === "all" || (filter === "new" && d._new) || (filter === "unv" && d._unv) || (filter === "stale" && d._stale); });
       if (!shown.length) listEl.appendChild(h("p", { class: "mute", style: "padding:20px;margin:0", text: "Nothing here." }));
-      shown.forEach(function (d) { listEl.appendChild(staffRow(d, reload)); });
+      shown.forEach(function (d) { listEl.appendChild(staffRow(d)); });
     }
     reqEl.appendChild(h("h2", { style: "margin:36px 0 12px", text: "People asking for access (" + requests.length + ")" }));
     if (!requests.length) reqEl.appendChild(h("p", { class: "mute", text: "No one is waiting." }));
@@ -1081,36 +1165,60 @@
       h("p", { class: "lead", text: "Every deal sent through the portal, oldest first. Open one to link it, add to-dos, notes or move its step." }), alertBox(alerts), chipsEl, listEl, reqEl), "Staff");
   }
 
-  function staffRow(d, reload) {
+  function staffRow(d) {
     var det = h("details", { class: "sec" });
+    var sumTags = h("span", { class: "tags" });
+    function drawTags() {
+      sumTags.replaceChildren(); add(sumTags, [stageTag(d.step), d._new ? h("span", { class: "pill o", text: "New" }) : null, d._unv ? h("span", { class: "pill y", text: "Unverified sender" }) : null, d._stale ? h("span", { class: "pill y", text: "Stale" }) : null,
+        d.ledger_deal_key ? null : h("span", { class: "pill", text: "Not linked" })]);  // add() skips the empty ones; replaceChildren would print "null"
+    }
+    drawTags();
     var sum = h("summary", null, h("span", { class: "srow" }, h("span", { class: "addr", text: d.address || "Deal" }),
-      h("span", { class: "sub", text: d.submit_email + " · " + (d._age === 1 ? "1 day" : d._age + " days") + " old" }),
-      h("span", { class: "tags" }, stageTag(d.step), d._new ? h("span", { class: "pill o", text: "New" }) : null, d._unv ? h("span", { class: "pill y", text: "Unverified sender" }) : null, d._stale ? h("span", { class: "pill y", text: "Stale" }) : null,
-        d.ledger_deal_key ? null : h("span", { class: "pill", text: "Not linked" }))));
+      h("span", { class: "sub", text: d.submit_email + " · " + (d._age === 1 ? "1 day" : d._age + " days") + " old" }), sumTags));
     var body = h("div", { class: "body" });
     var loaded = false;
     det.appendChild(sum); det.appendChild(body);
+    // 11-27 W7: after a save, fetch this deal again and redraw only this panel. The row stays open, the other rows and the board are not touched.
+    function redraw(saved, keep) {
+      return api.staffDealDetail(d.deal_id).then(function (data) {
+        if (data && data.deal) { if (data.deal.step) d.step = data.deal.step; if (data.deal.ledger_deal_key !== undefined) d.ledger_deal_key = data.deal.ledger_deal_key; }
+        drawTags();
+        body.replaceChildren(staffPanel(d, data, redraw, saved, keep));
+      });
+    }
     det.addEventListener("toggle", function () {
       if (!det.open || loaded) return;
       loaded = true; body.textContent = "Loading...";
-      api.staffDealDetail(d.deal_id).then(function (data) { body.replaceChildren(staffPanel(d, data, reload)); })
-        .catch(function (e) { body.replaceChildren(msg((e && e.message) || "Could not load.", "error")); });
+      api.staffDealDetail(d.deal_id).then(function (data) { body.replaceChildren(staffPanel(d, data, redraw)); })
+        .catch(function (e) { body.replaceChildren(msg((e && e.message) || "Could not load.", "error")); loaded = false; });
     });
     return det;
   }
 
-  function staffPanel(d, data, reload) {
+  function staffPanel(d, data, redraw, saved, keep) {
     var root = h("div", { class: "staff-panel" }), status = h("div", { role: "status" });
-    function run(p) {
+    keep = keep || {};
+    if (saved) status.appendChild(msg(saved, "good"));
+    // run(p, used): p is the save; "used" names the box that was just sent, so it is emptied; every other typed box is kept
+    function run(p, used) {
       status.replaceChildren(msg("Saving..."));
-      return p.then(function () { status.replaceChildren(msg("Saved.", "good")); reload(); }).catch(function (e) { status.replaceChildren(msg((e && e.message) || "That did not save.", "error")); });
+      return p.then(function () {
+        var k = { key: key.value, nt: nt.value, nn: nn.value, vis: vis.checked, stepNote: stepNote.value };
+        k.stepSel = stepSel.value; k.reason = reason.value;
+        if (used) k[used] = "";
+        if (used === "key") k.key = null;  // a linked key stays in its box (the panel draws it from the deal)
+        if (used === "nn") k.vis = false;
+        return redraw("Saved.", k).catch(function (e) {  // saved, but the fresh copy did not load
+          status.replaceChildren(msg("Saved. The panel could not refresh: " + ((e && e.message) || "close it and open it again."), "good"));
+        });
+      }, function (e) { status.replaceChildren(msg((e && e.message) || "That did not save.", "error")); });
     }
     function sub(t) { return h("h3", { text: t }); }
     // link
     var key = h("input", { type: "text", id: "lk_" + d.deal_id, value: d.ledger_deal_key || "", placeholder: "Ledger deal key" });
     root.appendChild(sub("Link to the ledger"));
     root.appendChild(h("div", { class: "ctl" }, key,
-      h("button", { class: "btn small", type: "button", text: "Link", onclick: function () { if (key.value.trim()) run(api.staffLink(d.deal_id, key.value.trim())); } })));
+      h("button", { class: "btn small", type: "button", text: "Link", onclick: function () { if (key.value.trim()) run(api.staffLink(d.deal_id, key.value.trim()), "key"); } })));
     // todos
     root.appendChild(sub("To-dos"));
     var ul = h("ul", { class: "clean" });
@@ -1125,7 +1233,7 @@
     var nt = h("input", { type: "text", "aria-label": "New to-do", placeholder: "New to-do" });
     var kind = h("select", { "aria-label": "Kind", class: "fit" }, [["upload", "Upload"], ["answer", "Answer"], ["other", "Other"]].map(function (k) { return h("option", { value: k[0], text: k[1] }); }));
     root.appendChild(h("div", { class: "ctl" }, nt, kind,
-      h("button", { class: "btn small", type: "button", text: "Add to-do", onclick: function () { if (nt.value.trim()) run(api.staffAddTodo(d.deal_id, nt.value.trim(), kind.value)); } })));
+      h("button", { class: "btn small", type: "button", text: "Add to-do", onclick: function () { if (nt.value.trim()) run(api.staffAddTodo(d.deal_id, nt.value.trim(), kind.value), "nt"); } })));
     // files
     root.appendChild(sub("Files"));
     if (!data.files.length) root.appendChild(h("p", { class: "mute", text: "No files." }));
@@ -1149,7 +1257,7 @@
     var vis = h("input", { type: "checkbox", id: "vis_" + d.deal_id });
     root.appendChild(nn);
     root.appendChild(h("div", { class: "ctl" }, vis, h("label", { for: "vis_" + d.deal_id, style: "margin:0;font-weight:400", text: "Lender can see this" }),
-      h("button", { class: "btn small", type: "button", text: "Add note", onclick: function () { if (nn.value.trim()) run(api.staffAddNote(d.deal_id, nn.value.trim(), vis.checked)); } })));
+      h("button", { class: "btn small", type: "button", text: "Add note", onclick: function () { if (nn.value.trim()) run(api.staffAddNote(d.deal_id, nn.value.trim(), vis.checked), "nn"); } })));
     // step
     root.appendChild(sub("Set the step"));
     var stepSel = h("select", { "aria-label": "Step", class: "fit" }, STEPS.concat([["complete", "Complete"], ["not_moving_forward", "Not moving forward"]]).map(function (s) { return h("option", { value: s[0], text: s[1] }); }));
@@ -1161,8 +1269,15 @@
     root.appendChild(h("div", { class: "ctl" }, stepSel, reason));
     root.appendChild(h("div", { class: "ctl" }, stepNote,
       h("button", { class: "btn small", type: "button", text: "Set step", onclick: function () {
-        run(api.staffSetStep(d.deal_id, stepSel.value, stepSel.value === "not_moving_forward" ? reason.value : null, stepNote.value.trim()));
+        run(api.staffSetStep(d.deal_id, stepSel.value, stepSel.value === "not_moving_forward" ? reason.value : null, stepNote.value.trim()), "stepNote");
       } })));
+    // put back what was typed in the other boxes before this save
+    if (keep.key != null) key.value = keep.key;
+    if (keep.nt != null) nt.value = keep.nt;
+    if (keep.nn != null) nn.value = keep.nn;
+    if (keep.vis != null) vis.checked = !!keep.vis;
+    if (keep.stepNote != null) stepNote.value = keep.stepNote;
+    if (keep.stepSel != null && keep.stepSel !== d.step) { stepSel.value = keep.stepSel; if (keep.reason) reason.value = keep.reason; syncReason(); }
     root.appendChild(status);
     return root;
   }
@@ -1170,6 +1285,7 @@
   /* ---------- router ---------- */
   function route() {
     var hash = location.hash || "#/", m;
+    ROUTE++;
     setNav();
     track("$pageview");
     try {
